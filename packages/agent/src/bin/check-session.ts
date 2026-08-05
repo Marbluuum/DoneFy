@@ -12,39 +12,57 @@
  * then on. That login is the only manual step in the whole setup.
  */
 
-import type { BrowserContext } from 'playwright-core'
+import type { BrowserContext } from 'playwright'
 
+import { agentConfig, loadEnv, resolveBrowser } from '../config.js'
 import { assertSignedIn, launchBrowser } from '../linkedin/browser.js'
 import { AdapterError } from '../linkedin/adapter.js'
 import { SELECTORS, URLS, anyOf } from '../linkedin/selectors.js'
 
-const profilePath = process.env.CHROME_PROFILE_PATH ?? './.chrome-profile'
-const executablePath = process.env.CHROME_EXECUTABLE_PATH ?? ''
-const screenshotDir = process.env.SCREENSHOT_DIR ?? './screenshots'
-// Headed by default: the first run needs a human to log in, and a visible
-// window is what a real session looks like. HEADLESS=1 is for servers and CI.
-const headless = process.env.HEADLESS === '1'
+loadEnv()
 
-console.log(`Perfil: ${profilePath}`)
-console.log(`Chrome: ${executablePath || '(Chromium incluido — apuntá CHROME_EXECUTABLE_PATH a tu Chrome real)'}`)
-console.log(`Modo:   ${headless ? 'headless' : 'con ventana'}`)
-console.log('Abriendo LinkedIn…\n')
+const { profilePath, screenshotDir, headless } = agentConfig()
+
+let browser
+try {
+  browser = resolveBrowser()
+} catch (error) {
+  console.error(`❌ ${error instanceof Error ? error.message : String(error)}`)
+  process.exit(1)
+}
+
+const SOURCE_LABEL = {
+  configured: 'configurado en .env',
+  detected: 'detectado automáticamente',
+  bundled: 'incluido',
+} as const
+
+console.log(`Perfil:  ${profilePath}`)
+console.log(`Chrome:  ${browser.label}  (${SOURCE_LABEL[browser.source]})`)
+console.log(`Modo:    ${headless ? 'headless' : 'con ventana'}`)
+console.log('\nAbriendo LinkedIn…\n')
 
 let context: BrowserContext
 try {
-  context = await launchBrowser({ profilePath, executablePath, headless, screenshotDir })
+  context = await launchBrowser({
+    profilePath,
+    executablePath: browser.executablePath,
+    headless,
+    screenshotDir,
+  })
 } catch (error) {
   // Launch failures surface as raw Playwright stack traces, which say nothing
-  // useful to whoever is running setup. The display case is the common one.
+  // useful to whoever is running setup. These are the causes that actually come up.
   const message = error instanceof Error ? error.message : String(error)
   if (/DISPLAY|X server/i.test(message)) {
-    console.error('❌ No hay entorno gráfico disponible para abrir el navegador.')
-    console.error('   Si estás en un servidor o contenedor, corré: HEADLESS=1 npm run check-session -w @donefy/agent')
+    console.error('❌ No hay entorno gráfico para abrir el navegador.')
+    console.error('   En un servidor o contenedor: HEADLESS=1 npm run check-session -w @donefy/agent')
     console.error('   (en headless no vas a poder loguearte a mano la primera vez)')
   } else if (/Executable doesn't exist|ENOENT/i.test(message)) {
     console.error('❌ No se encontró el navegador.')
-    console.error(`   CHROME_EXECUTABLE_PATH apunta a: ${executablePath || '(vacío)'}`)
-    console.error('   Dejalo vacío para usar el Chromium incluido, o corregí la ruta.')
+    console.error(`   Se intentó: ${browser.label}`)
+    console.error('   Si no tenés Chrome instalado, bajá el Chromium de Playwright:')
+    console.error('     npx playwright install chromium')
   } else {
     console.error('❌ No se pudo abrir el navegador:', message)
   }
@@ -66,7 +84,7 @@ try {
   const pending = await page.locator(anyOf(SELECTORS.invitationsSent.row)).count()
   console.log(`   Invitaciones pendientes: ${pending}`)
 
-  console.log('\nTodo listo. El perfil queda logueado para las próximas corridas.')
+  console.log('\nListo. El perfil queda logueado para las próximas corridas.')
 } catch (error) {
   if (error instanceof AdapterError) {
     console.error(`❌ ${error.kind}: ${error.message}`)

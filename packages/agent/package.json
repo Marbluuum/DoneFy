@@ -17,6 +17,6 @@
     "@anthropic-ai/sdk": "^0.115.0",
     "@donefy/core": "*",
     "@donefy/db": "*",
-    "playwright-core": "^1.62.1"
+    "playwright": "^1.62.1"
   }
 }

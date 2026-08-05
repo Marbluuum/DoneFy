@@ -1,4 +1,4 @@
-import { chromium, type BrowserContext, type Page } from 'playwright-core'
+import { chromium, type BrowserContext, type Page } from 'playwright'
 
 import { AdapterError } from './adapter.js'
 import { SELECTORS, URLS, anyOf } from './selectors.js'
