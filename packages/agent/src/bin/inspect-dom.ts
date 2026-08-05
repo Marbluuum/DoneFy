@@ -19,6 +19,7 @@ import type { BrowserContext, Page } from 'playwright'
 
 import { agentConfig, loadEnv, resolveBrowser } from '../config.js'
 import { launchBrowser } from '../linkedin/browser.js'
+import { extractComments } from '../linkedin/extract.js'
 import { SELECTORS, URLS } from '../linkedin/selectors.js'
 
 loadEnv()
@@ -105,9 +106,24 @@ async function discover(groupName: string) {
       let node: Element | null = el
       for (let depth = 0; node && depth < 7; depth++) {
         const classes = (node.className ?? '').toString().trim().split(/\s+/).filter(Boolean)
-        // Ember/React runtime ids are per-render and useless as selectors.
-        const usable = classes.filter((c) => !/^ember\d|^css-|^\d/.test(c)).slice(0, 6)
-        out.push(`${'  '.repeat(depth)}<${node.tagName.toLowerCase()}> ${usable.join(' .') ? '.' + usable.join(' .') : '(sin clases)'}`)
+        // Hashed CSS-module names change on every LinkedIn deploy, so reporting
+        // them as candidates is worse than reporting nothing — they look like
+        // a fix and break on the next release.
+        const hashed = (c: string) => /^_?[0-9a-f]{6,10}$/i.test(c) || /^ember\d|^css-|^\d/.test(c)
+        const usable = classes.filter((c) => !hashed(c)).slice(0, 6)
+        const hashedCount = classes.length - usable.length
+
+        // Attributes that survive a rename, which is what a selector should use.
+        const stable = ['aria-label', 'role', 'data-id', 'data-urn', 'data-view-name', 'href', 'type']
+          .map((attr) => {
+            const value = node!.getAttribute(attr)
+            return value ? `[${attr}="${value.slice(0, 45)}"]` : ''
+          })
+          .filter(Boolean)
+          .join(' ')
+
+        const classText = usable.length ? '.' + usable.join(' .') : hashedCount ? `(${hashedCount} clases hasheadas)` : '(sin clases)'
+        out.push(`${'  '.repeat(depth)}<${node.tagName.toLowerCase()}> ${classText} ${stable}`.trimEnd())
         node = node.parentElement
       }
       return out
@@ -130,8 +146,46 @@ try {
   if (postUrl) {
     await goTo(postUrl, 'PUBLICACIÓN')
     await probe(SELECTORS.post)
+
+    // The real test. Selector counts say whether an element was found; this
+    // says whether a usable comment came out the other side, which is the only
+    // thing the agent actually needs from this page.
+    console.log('\n── EXTRACCIÓN DE COMENTARIOS ──')
+    const comments = await extractComments(page)
+    console.log(`\n  ${comments.length > 0 ? '✅' : '❌'} ${comments.length} comentarios extraídos`)
+    for (const c of comments.slice(0, 5)) {
+      console.log(`\n     @${c.authorPublicIdentifier}  (${c.authorName})`)
+      console.log(`       titular: ${c.authorHeadline?.slice(0, 60) ?? '(sin dato)'}`)
+      console.log(`       texto:   ${c.body.slice(0, 60)}`)
+      console.log(`       fecha:   ${c.postedAt?.toISOString() ?? '(sin dato)'}`)
+    }
+    if (comments.length > 5) console.log(`\n     …y ${comments.length - 5} más`)
   } else {
     console.log('\n⚠️  Sin URL de publicación: los selectores de comentarios no se probaron.')
+  }
+
+  // The withdraw control had no matching label, so list what the buttons on
+  // that page actually say rather than guessing at another aria-label.
+  await goTo(URLS.sentInvitations, 'BOTONES EN INVITACIONES')
+  const buttonInfo = await page
+    .locator('button')
+    .evaluateAll((nodes) =>
+      nodes
+        .slice(0, 40)
+        .map((n) => ({
+          label: n.getAttribute('aria-label') ?? '',
+          text: (n.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 30),
+        }))
+        .filter((b) => b.label || b.text),
+    )
+    .catch(() => [])
+
+  const seen = new Set<string>()
+  for (const b of buttonInfo) {
+    const key = `${b.label}|${b.text}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    console.log(`     texto="${b.text}"  aria-label="${b.label}"`)
   }
 
   console.log(`\n${'═'.repeat(60)}`)
