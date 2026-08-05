@@ -2,7 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "./src",
-    "outDir": "./dist"
+    "outDir": "./dist",
+    // page.evaluate() callbacks are compiled here but execute in the browser,
+    // so they need the DOM types even though the package runs under Node.
+    "lib": ["ES2023", "DOM"]
   },
   "include": ["src/**/*.ts"],
   "references": [{ "path": "../core" }, { "path": "../db" }]

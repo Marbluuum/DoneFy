@@ -43,20 +43,37 @@ export const SELECTORS = {
   ],
 
   post: {
-    /** Comments on the currently open post. */
-    comment: ['article.comments-comment-entity', '.comments-comment-item'],
-    commentAuthorLink: ['a.comments-post-meta__actor-link', '.comments-post-meta__actor-link'],
+    /**
+     * Comments on the currently open post.
+     *
+     * Confirmed against the live DOM: the class-based containers are gone, but
+     * the reply buttons are there, so comments render — the container name
+     * changed, not the structure. `:has()` walks up from the button, which
+     * survives a rename of the container itself.
+     */
+    comment: [
+      'article:has(button[aria-label*="Responder"])',
+      'article.comments-comment-entity',
+      '.comments-comment-item',
+    ],
+    commentAuthorLink: [
+      'a[href*="/in/"]',
+      'a.comments-post-meta__actor-link',
+      '.comments-post-meta__actor-link',
+    ],
     commentAuthorHeadline: ['.comments-post-meta__headline', '.comments-comment-meta__description'],
     commentBody: ['.comments-comment-item__main-content', '.update-components-text'],
     /** Loads the next page of comments. */
     loadMoreComments: [
-      'button.comments-comments-list__load-more-comments-button',
       'button[aria-label*="más comentario"]',
       'button[aria-label*="more comment"]',
+      'button.comments-comments-list__load-more-comments-button',
     ],
-    replyButton: ['button.comments-comment-social-bar__reply-action-button', 'button[aria-label*="Responder"]'],
-    replyEditor: ['div.ql-editor[contenteditable="true"]', 'div[role="textbox"]'],
-    replySubmit: ['button.comments-comment-box__submit-button--cr', 'button[type="submit"]'],
+    // Verified live: aria-label matches, the class does not. Ordered so the
+    // one that works is tried first.
+    replyButton: ['button[aria-label*="Responder"]', 'button[aria-label*="Reply"]'],
+    replyEditor: ['div[role="textbox"]', 'div.ql-editor[contenteditable="true"]'],
+    replySubmit: ['button[type="submit"]', 'button.comments-comment-box__submit-button--cr'],
   },
 
   profile: {
@@ -78,9 +95,13 @@ export const SELECTORS = {
     limitReached: ['.ip-fuse-limit-alert', 'div[data-test-modal] h2:has-text("límite")'],
   },
 
+  // Verified against the live DOM. The ones without a note matched on the
+  // first candidate; where the second matched and the first did not, the
+  // working one has been moved to the front.
   messaging: {
     conversationListItem: ['li.msg-conversation-listitem', '.msg-conversations-container__convo-item'],
-    conversationLink: ['a.msg-conversation-listitem__link', '.msg-conversation-listitem__link'],
+    /** The `a.` prefix does not match — the element is not an anchor. */
+    conversationLink: ['.msg-conversation-listitem__link', 'a.msg-conversation-listitem__link'],
     conversationName: ['.msg-conversation-listitem__participant-names', 'h3'],
     conversationSnippet: ['.msg-conversation-card__message-snippet', '.msg-conversation-listitem__message-snippet'],
     conversationTimestamp: ['time.msg-conversation-listitem__time-stamp', 'time'],
@@ -88,7 +109,18 @@ export const SELECTORS = {
     messageSender: ['.msg-s-message-group__name', '.msg-s-event-listitem__name'],
     messageBody: ['.msg-s-event-listitem__body', '.msg-s-event__content'],
     composer: ['div.msg-form__contenteditable[contenteditable="true"]', 'div[role="textbox"]'],
-    sendButton: ['button.msg-form__send-button', 'button[type="submit"]'],
+    /**
+     * The only miss in messaging. Neither the class nor a submit type matched,
+     * so the send control is likely an aria-labelled button rendered outside
+     * the form element — hence the label-first ordering.
+     */
+    sendButton: [
+      'button[aria-label*="Enviar"]',
+      'button[aria-label*="Send"]',
+      'form.msg-form button:not([aria-label*="adjunt"]):not([aria-label*="attach"])',
+      'button.msg-form__send-button',
+      'button[type="submit"]',
+    ],
   },
 
   invitationsSent: {

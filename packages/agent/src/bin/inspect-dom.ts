@@ -1,15 +1,18 @@
 /**
- * Reports which selectors actually match on the live site.
+ * Reports which selectors match on the live site — and discovers replacements
+ * for the ones that don't.
  *
  * Selectors are the one part of this codebase that cannot be verified without
- * a signed-in browser on a real machine, so this exists to close that loop: it
- * visits each page, tries every candidate in SELECTORS, and prints what hit and
- * what missed. Paste the output back and the misses become a one-file fix.
+ * a signed-in browser on a real machine. The first version only checked
+ * candidates I had guessed, which taught nothing when every candidate missed.
+ * Now, when a group has no hit, it anchors on something that *does* exist
+ * nearby and reports the real class names around it — so the fix is read off
+ * the DOM instead of guessed again.
  *
  *   npm run inspect-dom -w @donefy/agent
- *   npm run inspect-dom -w @donefy/agent -- https://www.linkedin.com/posts/xxx
+ *   npm run inspect-dom -w @donefy/agent -- "https://www.linkedin.com/feed/update/urn:li:share:123/"
  *
- * Reports counts and element tag names only — never anyone's content.
+ * Reports counts, tag names and class names. Never anyone's message content.
  */
 
 import type { BrowserContext, Page } from 'playwright'
@@ -39,52 +42,100 @@ try {
 
 const page = context.pages()[0] ?? (await context.newPage())
 
-/** Prints hit/miss for one selector group. */
-async function probe(label: string, groups: Record<string, readonly string[]>) {
-  console.log(`\n── ${label} ──`)
+/**
+ * Anchors that are known to exist and are described by what they *do* — an
+ * aria-label, an href shape — rather than by a class that can be renamed.
+ * When a selector group misses, the DOM around its anchor is dumped instead.
+ */
+const DISCOVERY_ANCHORS: Record<string, { anchor: string; note: string }> = {
+  comment: { anchor: 'button[aria-label*="Responder"]', note: 'contenedor del comentario' },
+  commentAuthorLink: { anchor: 'a[href*="/in/"]', note: 'link al perfil del autor' },
+  commentBody: { anchor: 'button[aria-label*="Responder"]', note: 'texto del comentario' },
+  sendButton: { anchor: 'div[role="textbox"]', note: 'botón de enviar' },
+  row: { anchor: 'a[href*="/in/"]', note: 'fila de invitación' },
+  loggedIn: { anchor: 'a[href*="/feed"]', note: 'barra de navegación' },
+}
+
+async function goTo(url: string, label: string) {
+  console.log(`\n${'═'.repeat(60)}\n${label}`)
+  await page.goto(url, { waitUntil: 'domcontentloaded' })
+  // LinkedIn hydrates well after domcontentloaded; without this the page looks
+  // empty and every selector reports a false miss.
+  await page.waitForTimeout(5000).catch(() => {})
+  console.log(`URL final: ${page.url()}`)
+}
+
+async function probe(groups: Record<string, readonly string[]>) {
   for (const [name, selectors] of Object.entries(groups)) {
-    const results: string[] = []
+    const lines: string[] = []
+    let hit = false
     for (const selector of selectors) {
       const count = await page.locator(selector).count().catch(() => 0)
-      results.push(`${count > 0 ? '✅' : '  '} ${String(count).padStart(3)}  ${selector}`)
+      if (count > 0) hit = true
+      lines.push(`${count > 0 ? '✅' : '  '} ${String(count).padStart(4)}  ${selector}`)
     }
-    const anyHit = results.some((r) => r.startsWith('✅'))
-    console.log(`\n  ${anyHit ? '✅' : '❌'} ${name}`)
-    for (const line of results) console.log(`     ${line}`)
+    console.log(`\n  ${hit ? '✅' : '❌'} ${name}`)
+    for (const line of lines) console.log(`     ${line}`)
+
+    if (!hit) await discover(name)
   }
 }
 
-try {
-  console.log(`Navegando al feed…`)
-  await page.goto(URLS.feed, { waitUntil: 'domcontentloaded' })
-  await page.waitForTimeout(3000)
-  console.log(`URL final: ${page.url()}`)
+/**
+ * Walks up from a known-present anchor, printing the tag and classes of each
+ * ancestor. Whichever level repeats once per item is the container.
+ */
+async function discover(groupName: string) {
+  const spec = DISCOVERY_ANCHORS[groupName]
+  if (!spec) return
 
-  await probe('Sesión', { loggedIn: SELECTORS.loggedIn, authWall: SELECTORS.authWall })
-
-  console.log('\nNavegando a invitaciones enviadas…')
-  await page.goto(URLS.sentInvitations, { waitUntil: 'domcontentloaded' })
-  await page.waitForTimeout(3000)
-  await probe('Invitaciones enviadas', SELECTORS.invitationsSent)
-
-  console.log('\nNavegando a mensajes…')
-  await page.goto(URLS.messaging, { waitUntil: 'domcontentloaded' })
-  await page.waitForTimeout(3000)
-  await probe('Mensajería', SELECTORS.messaging)
-
-  if (postUrl) {
-    console.log(`\nNavegando a la publicación…`)
-    await page.goto(postUrl, { waitUntil: 'domcontentloaded' })
-    await page.waitForTimeout(3000)
-    await probe('Publicación', SELECTORS.post)
-  } else {
-    console.log('\n⚠️  Sin URL de publicación: los selectores de comentarios no se probaron.')
-    console.log('   Volvé a correr con la URL de un post tuyo que tenga comentarios:')
-    console.log('   npm run inspect-dom -w @donefy/agent -- https://www.linkedin.com/posts/...')
+  const anchorCount = await page.locator(spec.anchor).count().catch(() => 0)
+  if (anchorCount === 0) {
+    console.log(`     🔍 sin ancla para descubrir (${spec.anchor} tampoco existe)`)
+    return
   }
 
-  console.log('\n─────────────────────────────────────')
-  console.log('Copiá todo esto y pegámelo. Con los ❌ ajusto los selectores.')
+  console.log(`     🔍 buscando ${spec.note} desde ${spec.anchor} (${anchorCount} encontrados):`)
+
+  const ancestry = await page
+    .locator(spec.anchor)
+    .first()
+    .evaluate((el) => {
+      const out: string[] = []
+      let node: Element | null = el
+      for (let depth = 0; node && depth < 7; depth++) {
+        const classes = (node.className ?? '').toString().trim().split(/\s+/).filter(Boolean)
+        // Ember/React runtime ids are per-render and useless as selectors.
+        const usable = classes.filter((c) => !/^ember\d|^css-|^\d/.test(c)).slice(0, 6)
+        out.push(`${'  '.repeat(depth)}<${node.tagName.toLowerCase()}> ${usable.join(' .') ? '.' + usable.join(' .') : '(sin clases)'}`)
+        node = node.parentElement
+      }
+      return out
+    })
+    .catch(() => [] as string[])
+
+  for (const line of ancestry) console.log(`        ${line}`)
+}
+
+try {
+  await goTo(URLS.feed, 'FEED')
+  await probe({ loggedIn: SELECTORS.loggedIn, authWall: SELECTORS.authWall })
+
+  await goTo(URLS.sentInvitations, 'INVITACIONES ENVIADAS')
+  await probe(SELECTORS.invitationsSent)
+
+  await goTo(URLS.messaging, 'MENSAJES')
+  await probe(SELECTORS.messaging)
+
+  if (postUrl) {
+    await goTo(postUrl, 'PUBLICACIÓN')
+    await probe(SELECTORS.post)
+  } else {
+    console.log('\n⚠️  Sin URL de publicación: los selectores de comentarios no se probaron.')
+  }
+
+  console.log(`\n${'═'.repeat(60)}`)
+  console.log('Copiá todo y pegámelo. Los 🔍 muestran el DOM real donde falló.')
 } catch (error) {
   console.error('\n❌ Error:', error instanceof Error ? error.message : error)
   process.exitCode = 1
