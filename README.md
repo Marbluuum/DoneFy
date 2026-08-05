@@ -44,7 +44,7 @@ replying in four seconds.
 
 | Package | Status | What it is |
 |---|---|---|
-| `packages/core` | ✅ built, 50 tests | State machine, quotas, timing, playbook, orchestrator. Pure, no I/O |
+| `packages/core` | ✅ built, 72 tests | State machine, quotas, timing, playbook, orchestrator, safety rails. Pure, no I/O |
 | `packages/db` | ✅ schema | Drizzle schema for Postgres (Supabase) |
 | `packages/agent` | ⏳ next | Chrome driver + LinkedIn adapter |
 | `apps/web` | ⏳ after that | Next.js panel with the inbox and quick replies |
@@ -150,6 +150,39 @@ out-of-hours sends are deferred to the next window rather than dropped.
 
 Every downgrade is recorded in `notes`, so the panel can show why the agent did
 or did not act.
+
+## Safety rails
+
+Quotas and jitter limit how fast the account acts. Neither notices when the
+account is *already* in trouble, or when the same person is about to be
+enrolled twice. Those are `health.ts` and `eligibility.ts`.
+
+**The circuit breaker** watches invitation acceptance rate — the signal that
+degrades first, and the one LinkedIn is known to weigh. An inbound account
+should clear 60% comfortably, because everyone was asked to comment. Falling
+toward cold-outreach numbers means something upstream is wrong (wrong audience,
+wrong post, a keyword being gamed), and sending harder makes it worse.
+
+| Condition | Verdict |
+|---|---|
+| Acceptance < 40% (min. 20 resolved) | `throttled` — invites stop, conversations continue |
+| Acceptance < 60% | `warning` — keeps going, flagged |
+| Action failures > 15% | `stopped` — a restriction is probably already live |
+| Pending invites > 200 | `throttled` |
+
+Throttling never punishes leads already mid-conversation for the account's
+invite numbers.
+
+**Cross-post deduplication** is the one that would bite hardest here. On an
+account that posts often, the same people comment again and again — that is
+what an engaged audience looks like. Treating each comment as a fresh lead
+would mean a second invitation and a third opening DM to the same person.
+`checkEligibility()` covers the whole account, not just one automation:
+already-enrolled, already-invited, booked, disqualified, opted out, owned by a
+human, or contacted inside the last 90 days.
+
+Keyword matching is boundary-aware and accent-insensitive, so `GUÍA`, `guia!`
+and `"guia"` all match while `seguían` does not.
 
 Two branches carry most of the value:
 
