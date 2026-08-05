@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsc -b",
     "test": "npm run build && node --test dist/**/*.test.js",
-    "check-session": "npm run build && node dist/bin/check-session.js"
+    "check-session": "npm run build && node dist/bin/check-session.js",
+    "inspect-dom": "npm run build && node dist/bin/inspect-dom.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

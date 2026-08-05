@@ -15,11 +15,23 @@
 export type SelectorSet = readonly string[]
 
 export const SELECTORS = {
-  /** Confirms a live session before anything else runs. */
+  /**
+   * Secondary confirmation of a live session.
+   *
+   * Session detection is primarily by URL — a signed-out browser gets
+   * redirected off /feed/, and that redirect is behaviour LinkedIn cannot
+   * change without changing what the site does. These are a fallback signal
+   * only, because anchoring auth to a CSS class means a class rename reads as
+   * a logged-out account.
+   */
   loggedIn: [
-    'nav [data-test-global-nav-me]',
-    'img.global-nav__me-photo',
+    '#global-nav',
+    'nav.global-nav',
     '.global-nav__me',
+    'img.global-nav__me-photo',
+    'button.global-nav__primary-link-me-menu-trigger',
+    'nav [data-test-global-nav-me]',
+    'main[id="main"]',
   ],
   /** Shown when LinkedIn wants a checkpoint, captcha or re-auth. */
   authWall: [
@@ -27,6 +39,7 @@ export const SELECTORS = {
     '#captcha-internal',
     '.authentication-outlet',
     'form.challenge',
+    '.join-form',
   ],
 
   post: {

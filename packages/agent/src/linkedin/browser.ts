@@ -1,3 +1,4 @@
+import { readSessionFromUrl } from '@donefy/core'
 import { chromium, type BrowserContext, type Page } from 'playwright'
 
 import { AdapterError } from './adapter.js'
@@ -55,29 +56,34 @@ export async function launchBrowser(options: BrowserOptions): Promise<BrowserCon
 export async function assertSignedIn(page: Page, screenshotDir?: string): Promise<void> {
   await navigate(page, URLS.feed)
 
+  // Let a redirect settle before reading the URL — LinkedIn bounces signed-out
+  // browsers after the initial document loads.
+  await page.waitForLoadState('domcontentloaded').catch(() => {})
+  const verdict = readSessionFromUrl(page.url())
+
+  if (verdict.state === 'signed_in') return
+
+  if (verdict.state === 'unknown') {
+    // Landing somewhere unexpected is more often a slow redirect than a dead
+    // session, so give the DOM a chance to say otherwise before failing.
+    const navPresent = await page
+      .locator(anyOf(SELECTORS.loggedIn))
+      .first()
+      .waitFor({ state: 'attached', timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (navPresent) return
+  }
+
   const authWall = await page.locator(anyOf(SELECTORS.authWall)).count()
-  if (authWall > 0) {
-    throw new AdapterError(
-      'auth',
-      'LinkedIn está pidiendo login o verificación. Abrí el perfil de Chrome a mano, resolvelo, y volvé a arrancar el agente.',
-      await capture(page, screenshotDir, 'auth-wall'),
-    )
-  }
+  const message =
+    verdict.state === 'checkpoint'
+      ? verdict.reason
+      : authWall > 0
+        ? 'LinkedIn está mostrando la pantalla de login. Logueate en la ventana y volvé a correr esto.'
+        : `${verdict.reason}. Logueate en la ventana y volvé a correr esto.`
 
-  const signedIn = await page
-    .locator(anyOf(SELECTORS.loggedIn))
-    .first()
-    .waitFor({ state: 'attached', timeout: 15_000 })
-    .then(() => true)
-    .catch(() => false)
-
-  if (!signedIn) {
-    throw new AdapterError(
-      'auth',
-      'No se encontró la sesión iniciada. Si LinkedIn cambió el DOM, revisá SELECTORS.loggedIn.',
-      await capture(page, screenshotDir, 'not-signed-in'),
-    )
-  }
+  throw new AdapterError('auth', message, await capture(page, screenshotDir, 'not-signed-in'))
 }
 
 /**
