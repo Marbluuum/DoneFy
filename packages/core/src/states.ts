@@ -19,12 +19,22 @@ export const ENROLLMENT_STATES = [
   'dm_sent',
   'followup_1_sent',
   'followup_2_sent',
+  /**
+   * They wrote back. The outbound sequence stops here and the conversation
+   * playbook takes over — see `playbook.ts`. Not terminal: this is where the
+   * qualifying actually happens.
+   */
+  'replied',
 
   // --- terminal ---
-  /** They wrote back. The automation stops and a human takes over. */
-  'replied',
   /** Ran the full sequence without a reply. */
   'closed',
+  /** Playbook finished: meeting booked. */
+  'booked',
+  /** Playbook finished: not the target profile, or no pain to solve. */
+  'disqualified',
+  /** Went off-script. A human owns the conversation now. */
+  'handed_off',
   /** Invite went unanswered long enough that we withdrew it to free the cap. */
   'invite_expired',
   /** Contact opted out, or was excluded from the panel. */
@@ -36,8 +46,10 @@ export const ENROLLMENT_STATES = [
 export type EnrollmentState = (typeof ENROLLMENT_STATES)[number]
 
 export const TERMINAL_STATES: ReadonlySet<EnrollmentState> = new Set([
-  'replied',
   'closed',
+  'booked',
+  'disqualified',
+  'handed_off',
   'invite_expired',
   'opted_out',
   'failed',
@@ -55,6 +67,10 @@ export const JOB_TYPES = [
   'check_connection',
   'withdraw_invite',
   'send_dm',
+  /** Read new inbound messages on a live conversation. */
+  'poll_conversation',
+  /** Send a playbook reply the agent chose, or the owner picked from the panel. */
+  'send_reply',
 ] as const
 
 export type JobType = (typeof JOB_TYPES)[number]

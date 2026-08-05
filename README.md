@@ -44,10 +44,10 @@ replying in four seconds.
 
 | Package | Status | What it is |
 |---|---|---|
-| `packages/core` | ✅ built, 16 tests | State machine, quotas, timing. Pure, no I/O |
+| `packages/core` | ✅ built, 32 tests | State machine, quotas, timing, conversation playbook. Pure, no I/O |
 | `packages/db` | ✅ schema | Drizzle schema for Postgres (Supabase) |
 | `packages/agent` | ⏳ next | Chrome driver + LinkedIn adapter |
-| `apps/web` | ⏳ after that | Next.js panel |
+| `apps/web` | ⏳ after that | Next.js panel with the inbox and quick replies |
 
 ## The state machine
 
@@ -66,8 +66,50 @@ detected ──▶ comment_replied ──┬─▶ (1st degree) ─────�
 
 dm_sent ──3d──▶ followup_1_sent ──5d──▶ followup_2_sent ──▶ closed
    │
-   └── they reply, at any point ──▶ replied   (automation stops, human takes over)
+   └── they reply, at any point ──▶ replied   (outbound stops, playbook takes over)
 ```
+
+## The conversation playbook
+
+Once someone replies, `packages/core/src/playbook.ts` drives. It is a
+transcription of how the account owner actually sells, not a generic sales bot:
+
+```
+qualifying_company   "tenes una empresa de tecnologia?"
+        │ confirms
+qualifying_pain      "estas en la busqueda de mas clientes?"
+        │ shares_pain          ← they must name the problem themselves
+pitching             short pitch + "te envío mi calendario? Quieres?"
+        │ requests_link
+awaiting_booking     the calendar link
+        │ books
+booked
+```
+
+**The pitch is unreachable until the lead names their own problem.** That
+ordering is the method, so it is a test, not a prompt instruction.
+
+Each step carries an autonomy level:
+
+| Level | When | What happens |
+|---|---|---|
+| `auto` | qualifying questions, a link they just asked for | Agent sends it |
+| `suggest` | the pitch | Panel proposes, owner clicks |
+| `handoff` | objection, question, anything unclear | Human owns it |
+
+A model improvising about pricing or scope in your name is worse than a reply
+an hour later, so `objects` / `asks_question` / `unclear` always hand off from
+every stage.
+
+**Quick replies** (`quickReplies()`) are the ManyChat-style button row for the
+inbox. They are templates, not generated text: at these stages the owner says
+nearly the same thing every time, so a template is instant, free, and sounds
+more like them than a model paraphrasing them would. The LLM is saved for where
+personalization actually pays — the 300-character invite note.
+
+The voice profile in `voice.ts` is extracted from real messages: one or two
+lines, no opening `¿`, first name plus `!`, ends on a question, and a banned
+list of the phrasings that give automation away.
 
 Two branches carry most of the value:
 

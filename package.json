@@ -13,7 +13,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "typecheck": "tsc --build",
-    "test": "node --test packages/core/dist/**/*.test.js",
+    "test": "npm run build && node --test packages/core/dist/*.test.js",
     "db:generate": "npm run db:generate -w @donefy/db",
     "db:push": "npm run db:push -w @donefy/db"
   },

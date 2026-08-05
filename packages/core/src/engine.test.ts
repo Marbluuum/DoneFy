@@ -120,9 +120,15 @@ test('an opt-out halts the sequence from any live state', () => {
 })
 
 test('terminal states produce no further work', () => {
-  for (const state of ['replied', 'closed', 'opted_out', 'failed'] as const) {
+  for (const state of ['closed', 'booked', 'disqualified', 'handed_off', 'opted_out', 'failed'] as const) {
     assert.equal(decide(enrollment({ state }), ctx()).kind, 'idle')
   }
+})
+
+test('a live conversation is left to the playbook, not the outbound scheduler', () => {
+  const d = decide(enrollment({ state: 'replied' }), ctx())
+  assert.equal(d.kind, 'idle')
+  assert.match(d.kind === 'idle' ? d.reason : '', /playbook/)
 })
 
 test('repeated failures stop the sequence rather than retrying forever', () => {

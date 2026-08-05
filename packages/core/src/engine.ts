@@ -186,6 +186,12 @@ export function decide(enrollment: EnrollmentView, ctx: DecisionContext): Decisi
       return { kind: 'transition', nextState: 'closed', reason: 'sequence exhausted without a reply' }
     }
 
+    case 'replied': {
+      // Live conversation. The outbound scheduler has no business here — the
+      // playbook drives from this point, one lead message at a time.
+      return { kind: 'idle', reason: 'conversation owned by the playbook' }
+    }
+
     default: {
       const exhaustive: never = enrollment.state as never
       return { kind: 'idle', reason: `unhandled state: ${String(exhaustive)}` }
@@ -210,7 +216,10 @@ export function applyExternalEvent(
 
   switch (event.type) {
     case 'contact_replied':
-      return 'replied'
+      // Already conversing: further messages are the playbook's business, not
+      // a state change. Returning 'replied' here would reset enteredStateAt and
+      // re-fire anything keyed to entering the state.
+      return state === 'replied' ? null : 'replied'
     case 'contact_opted_out':
       return 'opted_out'
     case 'invite_accepted':
