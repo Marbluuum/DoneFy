@@ -39,6 +39,18 @@ export const ENBI_VOICE: VoiceProfile = {
       message: 'Buenas! Vi que me comentaste la publicación, tienes una empresa de tecnología?',
     },
     {
+      context: 'Misma apertura, variante con pregunta abierta',
+      message: 'Buenas! Vi que me comentaste la publicación…a que te dedicas?',
+    },
+    {
+      context: 'Primer DM cuando la conexión la mandó la otra persona',
+      message: 'Buenas! Gracias por enviarme conexion, tienes una empresa de tecnología?',
+    },
+    {
+      context: 'La respuesta fue escueta y hace falta entender el rubro',
+      message: 'Perfecto, exactamente a que se dedican?',
+    },
+    {
       context: 'Retomar tras confirmar que es del perfil, buscando el dolor',
       message: 'Diego! Estuve de viaje, comentame…estas en la busqueda de mas clientes?',
     },
@@ -46,6 +58,14 @@ export const ENBI_VOICE: VoiceProfile = {
       context: 'Ofrecer la reunión una vez que nombró el problema',
       message:
         'Entiendo, nosotros conseguimos clientes mediante un sistema propio y personalizado para empresas de tecnología...si quieres te envío mi calendario para que agendes una reunión? Quieres?',
+    },
+    {
+      context: 'Aceptar una condición de fecha que puso la otra persona',
+      message: 'de 10',
+    },
+    {
+      context: 'Después de mandar el calendario',
+      message: 'Me avisas cuando te agendes?',
     },
   ],
   avoid: [

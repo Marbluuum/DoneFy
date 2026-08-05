@@ -41,8 +41,20 @@ export const LEAD_INTENTS = [
   'confirms',
   'denies',
   'shares_pain',
+  /**
+   * They asked what you do or how you'd help — "como nos podrias ayudar?",
+   * "quisiera saber que propones". This is green light, not an objection.
+   *
+   * Kept separate from `asks_question` deliberately: lumping them together
+   * stops the sequence at the exact moment the lead asked for the pitch, which
+   * is the warmest point in the whole funnel.
+   */
+  'invites_pitch',
   'requests_link',
   'books',
+  /** Said yes but attached a constraint — "puede ser la semana que viene?". */
+  'accepts_with_condition',
+  /** Wants a specific fact from you: price, terms, references, credentials. */
   'asks_question',
   'objects',
   'not_interested',
@@ -83,6 +95,23 @@ export function advance(stage: ConversationStage, intent: LeadIntent): PlaybookS
   }
   if (intent === 'books') {
     return { nextStage: 'booked', autonomy: 'auto', reason: 'meeting booked' }
+  }
+
+  // Asking what you do is an invitation, not an objection — and it can arrive
+  // at any point, often bundled with the pain ("somos malos comercialmente,
+  // quisiera saber que propones"). Answer it while it's warm.
+  if (intent === 'invites_pitch') {
+    return { nextStage: 'pitching', autonomy: 'suggest', reason: 'lead asked for the pitch' }
+  }
+
+  // Said yes with a constraint attached — a date, a person to loop in. The
+  // calendar link answers most of these, but a human confirms the terms.
+  if (intent === 'accepts_with_condition') {
+    return {
+      nextStage: 'awaiting_booking',
+      autonomy: 'suggest',
+      reason: 'accepted with a condition to confirm',
+    }
   }
 
   switch (stage) {
@@ -153,6 +182,12 @@ export type QuickReplyContext = {
   calendarUrl: string
   /** Set when the lead has been waiting, so the reply can acknowledge it. */
   wasSlow?: boolean
+  /**
+   * Their last reply was a bare "Sí" or similar. Worth one probe before moving
+   * on — a lead who has said nothing about their business yet can't be ranked
+   * for the invite queue, and the pitch lands better once they've described it.
+   */
+  replyWasTerse?: boolean
 }
 
 export function quickReplies(stage: ConversationStage, ctx: QuickReplyContext): QuickReply[] {
@@ -160,19 +195,20 @@ export function quickReplies(stage: ConversationStage, ctx: QuickReplyContext): 
   const opener = ctx.wasSlow ? `${firstName}! Estuve de viaje, comentame…` : `${firstName}! `
 
   switch (stage) {
-    case 'qualifying_company':
-      return [
-        {
-          label: 'Preguntar por clientes',
-          body: `${opener}estas en la busqueda de mas clientes?`,
-          advances: true,
-        },
-        {
-          label: 'Preguntar rubro',
-          body: `${firstName}! Que tipo de desarrollo hacen?`,
-          advances: false,
-        },
-      ]
+    case 'qualifying_company': {
+      const askForClients: QuickReply = {
+        label: 'Preguntar por clientes',
+        body: `${opener}estas en la busqueda de mas clientes?`,
+        advances: true,
+      }
+      const probeRubro: QuickReply = {
+        label: 'Profundizar el rubro',
+        body: `Perfecto, exactamente a que se dedican?`,
+        advances: false,
+      }
+      // On a one-word answer, lead with the probe rather than the next step.
+      return ctx.replyWasTerse ? [probeRubro, askForClients] : [askForClients, probeRubro]
+    }
 
     case 'qualifying_pain':
       return [
@@ -200,6 +236,9 @@ export function quickReplies(stage: ConversationStage, ctx: QuickReplyContext): 
 
     case 'awaiting_booking':
       return [
+        // The link alone doesn't close it — asking for confirmation is what
+        // turns "I'll look at it" into a slot on the calendar.
+        { label: 'Pedir confirmación', body: `Me avisas cuando te agendes?`, advances: false },
         { label: 'Reenviar calendario', body: calendarUrl, advances: false },
         {
           label: 'Recordatorio suave',
@@ -213,16 +252,35 @@ export function quickReplies(stage: ConversationStage, ctx: QuickReplyContext): 
   }
 }
 
+/** How this person entered the funnel. Changes only the opening line. */
+export type EntryPoint =
+  /** They commented a keyword on a post. */
+  | 'comment'
+  /** They sent the connection request. Different opener, same sequence. */
+  | 'inbound_connection'
+
 /**
  * The opening DM, sent once the connection is accepted.
  *
  * Fixed rather than generated: it is the same question every time, and the
- * personalization that matters at this point already happened in the invite
- * note.
+ * personalization that matters already happened in the invite note.
+ *
+ * `openEnded` swaps the yes/no question for "a que te dedicas?". It costs a
+ * turn — the answer can't be classified as confirm/deny — but it gets the lead
+ * describing their business in their own words, which is what the invite queue
+ * ranks on and what makes the later pitch land.
  */
-export function openingDm(firstName: string): string {
-  return `Buenas! Vi que me comentaste la publicación, tienes una empresa de tecnología?`.replace(
-    'Buenas!',
-    `Buenas ${firstName}!`,
-  )
+export function openingDm(
+  firstName: string,
+  entry: EntryPoint = 'comment',
+  openEnded = false,
+): string {
+  const greeting =
+    entry === 'inbound_connection'
+      ? `Buenas ${firstName}! Gracias por enviarme conexion,`
+      : `Buenas ${firstName}! Vi que me comentaste la publicación`
+
+  return openEnded
+    ? `${greeting}${entry === 'comment' ? '…' : ' '}a que te dedicas?`
+    : `${greeting}${entry === 'comment' ? ', ' : ' '}tienes una empresa de tecnología?`
 }

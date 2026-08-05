@@ -32,6 +32,31 @@ test('volunteering the pain early skips the redundant question', () => {
   assert.equal(step.nextStage, 'pitching')
 })
 
+test('being asked for the pitch advances instead of stopping', () => {
+  // Yeison: "Así es, como nos podrías ayudar?" — Omar: "quisiera saber que
+  // propones". Treating these as questions would hand off at the warmest point
+  // in the funnel, which is exactly where the sequence should keep going.
+  for (const stage of ['qualifying_company', 'qualifying_pain'] as const) {
+    const step = advance(stage, 'invites_pitch')
+    assert.equal(step.nextStage, 'pitching', stage)
+    assert.notEqual(step.autonomy, 'handoff', stage)
+  }
+})
+
+test('a price question and a pitch invitation are routed differently', () => {
+  // The distinction the classifier has to get right.
+  assert.equal(advance('qualifying_company', 'asks_question').nextStage, 'handed_off')
+  assert.equal(advance('qualifying_company', 'invites_pitch').nextStage, 'pitching')
+})
+
+test('accepting with a date condition moves forward, with a human confirming', () => {
+  // Bernardo: "Puede ser la semana siguiente?, ideal martes o miercoles" —
+  // that is a yes, not a no.
+  const step = advance('pitching', 'accepts_with_condition')
+  assert.equal(step.nextStage, 'awaiting_booking')
+  assert.equal(step.autonomy, 'suggest')
+})
+
 test('objections and questions go to a human, never to the model', () => {
   for (const stage of ['qualifying_company', 'qualifying_pain', 'pitching'] as const) {
     for (const intent of ['objects', 'asks_question', 'unclear'] as const) {
@@ -85,8 +110,11 @@ test('a slow reply acknowledges the delay instead of ignoring it', () => {
 test('generated copy keeps the voice: no opening punctuation, short, asks something', () => {
   const messages = [
     openingDm('Diego'),
+    openingDm('Yeison', 'inbound_connection'),
+    openingDm('Piero', 'comment', true),
     ...quickReplies('qualifying_company', CTX).map((r) => r.body),
     ...quickReplies('qualifying_pain', CTX).map((r) => r.body),
+    ...quickReplies('awaiting_booking', CTX).map((r) => r.body),
   ]
   for (const m of messages) {
     assert.ok(!m.includes('¿'), `opening question mark in: ${m}`)
@@ -95,6 +123,38 @@ test('generated copy keeps the voice: no opening punctuation, short, asks someth
   }
   assert.ok(openingDm('Diego').startsWith('Buenas Diego!'))
   assert.ok(openingDm('Diego').endsWith('?'))
+})
+
+test('the opener matches how the lead arrived', () => {
+  // A "Vi que me comentaste" to someone who sent *you* the connection request
+  // is the kind of small wrongness that reads as automated.
+  assert.match(openingDm('Yeison', 'inbound_connection'), /Gracias por enviarme conexion/)
+  assert.ok(!openingDm('Yeison', 'inbound_connection').includes('comentaste'))
+
+  assert.match(openingDm('Diego', 'comment'), /Vi que me comentaste/)
+})
+
+test('the open-ended opener asks what they do instead of a yes/no', () => {
+  const open = openingDm('Piero', 'comment', true)
+  assert.match(open, /a que te dedicas\?$/)
+  assert.ok(!open.includes('empresa de tecnología'))
+})
+
+test('a one-word answer gets a probe before the next step', () => {
+  // Bernardo answered "Sí" and got "exactamente a que se dedican?" — a lead who
+  // has described nothing can't be ranked for the invite queue.
+  const [first] = quickReplies('qualifying_company', { ...CTX, replyWasTerse: true })
+  assert.match(first!.body, /exactamente a que se dedican/)
+  assert.equal(first!.advances, false)
+
+  const [normal] = quickReplies('qualifying_company', CTX)
+  assert.equal(normal!.advances, true)
+})
+
+test('sending the calendar is followed by asking for confirmation', () => {
+  // The link alone doesn't close it.
+  const bodies = quickReplies('awaiting_booking', CTX).map((r) => r.body)
+  assert.ok(bodies.some((b) => b.includes('Me avisas cuando te agendes')))
 })
 
 test('the public comment reply stays as short as the real one', () => {

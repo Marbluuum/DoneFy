@@ -86,8 +86,15 @@ awaiting_booking     the calendar link
 booked
 ```
 
-**The pitch is unreachable until the lead names their own problem.** That
-ordering is the method, so it is a test, not a prompt instruction.
+**The pitch is unreachable until the lead names their own problem** — unless
+they ask for it. `invites_pitch` ("como nos podrias ayudar?", "quisiera saber
+que propones") jumps straight to the pitch from any stage. It is deliberately
+separate from `asks_question`: collapsing the two would hand off at the warmest
+point in the funnel. A lead asking what you do is opening the door; a lead
+asking what it costs needs a human.
+
+Everything else about the ordering is enforced as a test rather than a prompt
+instruction.
 
 Each step carries an autonomy level:
 

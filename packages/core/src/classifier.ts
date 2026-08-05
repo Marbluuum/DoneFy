@@ -48,12 +48,18 @@ export type ClassifyInput = {
 export type Classifier = (input: ClassifyInput) => Promise<Classification>
 
 const INTENT_GUIDE: Record<LeadIntent, string> = {
-  confirms: 'Responde que sí a lo que se le preguntó.',
+  confirms: 'Responde que sí a lo que se le preguntó, o describe su empresa sin nombrar ningún problema.',
   denies: 'Responde que no a lo que se le preguntó.',
-  shares_pain: 'Describe un problema propio: le faltan clientes, no puede crecer, depende de pocas cuentas.',
+  shares_pain:
+    'Describe un problema propio: le faltan clientes, no puede crecer, depende de pocas cuentas, "somos malos comercialmente".',
+  invites_pitch:
+    'Pide que le cuentes tu propuesta: "como nos podrias ayudar?", "quisiera saber que propones", "contame mas". Está abriendo la puerta, no objetando.',
   requests_link: 'Pide la agenda, el calendario o los horarios.',
   books: 'Dice que ya agendó o que reservó un horario.',
-  asks_question: 'Hace una pregunta: precio, cómo funciona, quiénes son, casos.',
+  accepts_with_condition:
+    'Acepta la reunión pero pone una condición: una fecha concreta, un horario, sumar a otra persona. "Puede ser la semana que viene?"',
+  asks_question:
+    'Pide un dato concreto tuyo: precio, formas de pago, plazos, casos de éxito, referencias, quiénes son. Distinto de invites_pitch.',
   objects: 'Pone una objeción: caro, sin tiempo, ya trabajo con alguien, no me sirve.',
   not_interested: 'Pide que no le escriban más, o corta el tema.',
   unclear: 'No se entiende, o no encaja en ninguna de las anteriores.',
@@ -103,6 +109,8 @@ Devolvé JSON, sin texto alrededor:
 
 REGLAS:
 - "shares_pain" solo si el lead nombra un problema propio. Que confirme ser del rubro NO es dolor.
+- Distinguí bien "invites_pitch" de "asks_question": pedir que le cuentes tu propuesta abre la conversación; pedir un dato concreto (precio, plazos, referencias) necesita que responda un humano.
+- Si el mensaje mezcla dolor y pedido de propuesta ("somos malos comercialmente, quisiera saber que propones"), usá "invites_pitch": ya pasó la etapa del dolor.
 - Si el mensaje mezcla varias cosas, elegí la que hace avanzar la conversación.
 - Ante la duda usá "unclear" con confidence baja. Preferimos que lo lea un humano antes que arriesgar una respuesta equivocada.
 - No inventes datos en "signals": si no lo dijo, va null.`
@@ -129,8 +137,9 @@ export function parseClassification(raw: string): Classification {
 
   const intent = parsed.intent
   const known: LeadIntent[] = [
-    'confirms', 'denies', 'shares_pain', 'requests_link',
-    'books', 'asks_question', 'objects', 'not_interested', 'unclear',
+    'confirms', 'denies', 'shares_pain', 'invites_pitch', 'requests_link',
+    'books', 'accepts_with_condition', 'asks_question', 'objects',
+    'not_interested', 'unclear',
   ]
   // An unrecognized label is itself a reason not to trust the call.
   const safeIntent = known.includes(intent as LeadIntent) ? (intent as LeadIntent) : 'unclear'
