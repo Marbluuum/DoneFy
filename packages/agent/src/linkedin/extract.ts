@@ -66,43 +66,54 @@ function extractCommentsInPage(replyLabels: string[]): Array<{
     // is the run before the first badge word rather than the link's full text.
     const linkText = clean(profileLink.textContent)
     const authorName =
-      linkText.split(/\s+(?:perfil|• )/)[0]?.trim() ??
+      linkText.split(/\s+(?:perfil|•|\d+(?:er|do|ro))/)[0]?.trim() ||
       clean(profileLink.getAttribute('aria-label'))
 
     const time = best.querySelector('time')
     const timeValue = time?.getAttribute('datetime') ?? null
 
     /**
-     * The comment body.
+     * The comment body, by document order.
      *
-     * Taking the longest string in the container was wrong: the container's own
-     * text includes the name, the headline and the body concatenated, so the
-     * "longest" candidate was always the whole card. The body is instead the
-     * deepest element that owns its text — one whose children contribute
-     * nothing extra — which is where a leaf of real text actually lives.
+     * Two heuristics failed before this. "Longest text in the container"
+     * resolved to the container itself; "longest leaf" then picked the author's
+     * headline, because a headline like "Account Manager en Excelia | Strategic
+     * Business Development" is far longer than a comment that says "software".
+     * Length was never the signal.
+     *
+     * Order is. A comment card always reads: name, headline, timestamp, body,
+     * actions. So the body is the last run of text before the reply button —
+     * a fact about how a comment is read, which LinkedIn cannot change without
+     * changing what a comment looks like.
      */
-    const ownsItsText = (el: HTMLElement) => {
-      const text = clean(el.textContent)
-      if (!text) return false
-      const childText = Array.from(el.children)
-        .map((c) => clean(c.textContent))
-        .join('')
-      // Allow a little slack for markup inside the text (links, emoji spans).
-      return childText.length < text.length * 0.9
+    const noise =
+      /^(Responder|Reply|Recomendar|Like|Me gusta|Autor|Author|Premium|Verificado|Verified|Editado|Edited|\d+\s*(er|do|ro|th|st|nd)|•|·|\d+\s*(s|m|h|d|sem|mes|a|w|mo|y)$)/i
+
+    const walker = document.createTreeWalker(best, NodeFilter.SHOW_TEXT)
+    const beforeButton: string[] = []
+    while (walker.nextNode()) {
+      const node = walker.currentNode
+      // Keep only text that precedes the reply button in document order.
+      const buttonFollows =
+        node.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING
+      if (!buttonFollows) continue
+
+      const text = clean(node.textContent)
+      if (!text || noise.test(text)) continue
+      // Relative timestamps ("hace 2 días", "1 semana") sit between the
+      // headline and the body and would otherwise win as the last run.
+      if (/^(hace\s|\d+\s*(semana|mes|día|dia|hora|minuto|año))/i.test(text)) continue
+      beforeButton.push(text)
     }
 
-    const noise = /^(Responder|Reply|Recomendar|Like|Me gusta|Autor|Premium|Verificado|\d+\s*(er|do|ro)|•)$/i
+    // Drop the name and the screen-reader repeat of it that open every card.
+    const withoutName = beforeButton.filter(
+      (text) => !authorName || (!text.startsWith(authorName) && text !== authorName),
+    )
 
-    const leaves = Array.from(best.querySelectorAll<HTMLElement>('span, p, div'))
-      .filter(ownsItsText)
-      .map((el) => clean(el.textContent))
-      .filter((text) => text.length > 0 && !noise.test(text))
-      // The author's name and the headline appear before the body in the card;
-      // dropping anything that starts with the name removes both.
-      .filter((text) => !authorName || !text.startsWith(authorName))
-
-    const body = leaves.reduce((longest, text) => (text.length > longest.length ? text : longest), '')
-    const candidates = leaves
+    const body = withoutName.at(-1) ?? ''
+    // Everything between the name and the body is the headline.
+    const candidates = withoutName.slice(0, -1)
 
     // Any stable per-comment id LinkedIn exposes; falls back to the href plus
     // a body fingerprint, which is stable enough to dedupe replies against.
@@ -112,10 +123,12 @@ function extractCommentsInPage(replyLabels: string[]): Array<{
       best.querySelector('[data-id]')?.getAttribute('data-id') ??
       `${profileLink.getAttribute('href')}#${body.slice(0, 40)}`
 
-    // The headline is whatever else survived: shorter than the body, longer
-    // than a badge. Optional — it feeds ranking, never a send decision.
-    const headline =
-      candidates.find((text) => text !== body && text.length > 5 && text.length < 200) ?? ''
+    // The headline is the longest run between the name and the body. Optional —
+    // it feeds invite-queue ranking, never a send decision.
+    const headline = candidates.reduce(
+      (longest, text) => (text.length > longest.length ? text : longest),
+      '',
+    )
 
     results.push({
       urn,
