@@ -53,7 +53,7 @@ export async function launchBrowser(options: BrowserOptions): Promise<BrowserCon
  * one by one, each one looking like a separate problem.
  */
 export async function assertSignedIn(page: Page, screenshotDir?: string): Promise<void> {
-  await page.goto(URLS.feed, { waitUntil: 'domcontentloaded' })
+  await navigate(page, URLS.feed)
 
   const authWall = await page.locator(anyOf(SELECTORS.authWall)).count()
   if (authWall > 0) {
@@ -78,6 +78,39 @@ export async function assertSignedIn(page: Page, screenshotDir?: string): Promis
       await capture(page, screenshotDir, 'not-signed-in'),
     )
   }
+}
+
+/**
+ * Navigates, turning network failures into a classified error.
+ *
+ * A dropped connection or a slow page is transient — the queue should retry it,
+ * and it must not count against account health the way a refused action does.
+ * Left unwrapped it surfaces as a raw Playwright stack trace, which tells
+ * whoever is watching nothing about what to do.
+ */
+export async function navigate(page: Page, url: string, timeoutMs = 30_000): Promise<void> {
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new AdapterError(
+      'transient',
+      `No se pudo abrir ${url}. ${describeNetworkFailure(message)}`,
+    )
+  }
+}
+
+function describeNetworkFailure(message: string): string {
+  if (/ERR_CONNECTION_RESET|ERR_CONNECTION_REFUSED|ERR_NETWORK/i.test(message)) {
+    return 'La conexión se cortó — puede ser la red, un proxy o un firewall bloqueando LinkedIn.'
+  }
+  if (/ERR_NAME_NOT_RESOLVED/i.test(message)) {
+    return 'No se resolvió el dominio — revisá la conexión o el DNS.'
+  }
+  if (/Timeout/i.test(message)) {
+    return 'LinkedIn tardó demasiado en responder. Se reintenta más tarde.'
+  }
+  return message
 }
 
 /**
