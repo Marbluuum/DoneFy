@@ -172,6 +172,91 @@ export function publicIdentifierFromHref(href: string): string {
 }
 
 /**
+ * Reads the conversation list off whatever page is loaded.
+ *
+ * Separate from navigation on purpose. Folding the two together made the
+ * parsing untestable — every call reached for the network first — and hid that
+ * navigation is itself an action LinkedIn observes and so needs pacing of its
+ * own.
+ */
+export async function extractConversations(page: Page): Promise<
+  Array<{
+    threadId: string
+    participantPublicIdentifier: string
+    participantName: string
+    lastMessageAt: Date
+    lastMessageFromOwner: boolean
+    snippet: string
+  }>
+> {
+  const items = await page
+    .locator('li.msg-conversation-listitem, .msg-conversations-container__convo-item')
+    .evaluateAll((nodes) => {
+      const clean = (t: string | null | undefined) => (t ?? '').trim().replace(/\s+/g, ' ')
+      return nodes.map((node) => {
+        const link = node.querySelector('a[href*="/messaging/thread/"], a[href*="/in/"]')
+        const name = node.querySelector('.msg-conversation-listitem__participant-names, h3')
+        const snippet = node.querySelector(
+          '.msg-conversation-card__message-snippet, .msg-conversation-listitem__message-snippet',
+        )
+        return {
+          href: link?.getAttribute('href') ?? '',
+          name: clean(name?.textContent),
+          snippet: clean(snippet?.textContent),
+          datetime: node.querySelector('time')?.getAttribute('datetime') ?? '',
+        }
+      })
+    })
+
+  return items
+    .map((item) => ({
+      threadId: item.href.match(/\/messaging\/thread\/([^/?#]+)/)?.[1] ?? item.href,
+      participantPublicIdentifier: publicIdentifierFromHref(item.href),
+      participantName: item.name,
+      lastMessageAt: item.datetime ? new Date(item.datetime) : new Date(),
+      // LinkedIn prefixes the snippet with "Tú:" when the owner spoke last —
+      // which decides whether the playbook could still pick the thread up.
+      lastMessageFromOwner: /^(Tú|Tu|You)\s*:/i.test(item.snippet),
+      snippet: item.snippet,
+    }))
+    .filter((c) => c.threadId)
+}
+
+/** Reads one thread's messages off whatever page is loaded. */
+export async function extractThreadMessages(
+  page: Page,
+  ownerName: string,
+): Promise<Array<{ from: 'owner' | 'lead'; body: string; at: Date }>> {
+  const messages = await page
+    .locator('li.msg-s-message-list__event, .msg-s-event-listitem')
+    .evaluateAll((nodes) => {
+      const clean = (t: string | null | undefined) => (t ?? '').trim().replace(/\s+/g, ' ')
+      // LinkedIn labels the sender only on the first message of a run, so an
+      // unlabelled message continues whoever spoke last.
+      let lastSender = ''
+      return nodes.map((node) => {
+        const sender = clean(
+          node.querySelector('.msg-s-message-group__name, .msg-s-event-listitem__name')?.textContent,
+        )
+        if (sender) lastSender = sender
+        return {
+          sender: lastSender,
+          body: clean(node.querySelector('.msg-s-event-listitem__body, .msg-s-event__content')?.textContent),
+          datetime: node.querySelector('time')?.getAttribute('datetime') ?? '',
+        }
+      })
+    })
+
+  return messages
+    .filter((m) => m.body)
+    .map((m) => ({
+      from: ownerName && m.sender === ownerName ? ('owner' as const) : ('lead' as const),
+      body: m.body,
+      at: m.datetime ? new Date(m.datetime) : new Date(),
+    }))
+}
+
+/**
  * The send button in the message composer.
  *
  * Six buttons matched inside the form and none carried a usable label, so it
