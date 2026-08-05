@@ -46,7 +46,7 @@ replying in four seconds.
 |---|---|---|
 | `packages/core` | ✅ 72 tests | State machine, quotas, timing, playbook, orchestrator, safety rails. Pure, no I/O |
 | `packages/db` | ✅ schema | Drizzle schema for Postgres (Supabase) |
-| `packages/agent` | 🔨 LLM layer, 6 tests | Reply classifier + invite-note writer. Chrome driver next |
+| `packages/agent` | 🔨 24 tests | LLM layer, LinkedIn adapter interface, Chrome driver, history import |
 | `apps/web` | ✅ 6 views | Next.js panel: inbox, pipeline, automations, dashboard, leads |
 
 ## The state machine
@@ -219,6 +219,65 @@ signal the health breaker watches. Three guardrails:
   model to read it as information about interest, never as instructions.
 
 Both default to `claude-opus-5`, overridable per call site.
+
+## The LinkedIn layer
+
+`LinkedInAdapter` is an interface, not a class — the Playwright driver today, a
+hosted API the day volume justifies it, a fake in tests. Nothing above it knows
+which is running.
+
+**Every selector lives in one file.** LinkedIn ships rotating obfuscated class
+names, so selectors are the part of this codebase guaranteed to break;
+isolating them makes a breakage a one-file fix by someone reading the live DOM.
+Each is a list tried in order, so a redesign degrades to the next fallback
+instead of failing outright.
+
+**Failures are classified, because not all of them mean the same thing.** A
+broken selector is our bug and says nothing about the account — counting it
+against health would trip the breaker on a LinkedIn redesign. A refused action
+is exactly what the breaker exists for. `AdapterError.kind` carries that
+distinction.
+
+The browser is a **persistent context**, so cookies and fingerprint survive
+between runs and LinkedIn sees the same returning browser rather than a new one
+each time the agent wakes. Point `CHROME_EXECUTABLE_PATH` at real Chrome and
+the fingerprint stops being something to approximate.
+
+## History import
+
+The dedup rules ask "have we messaged this person before?" — and on a fresh
+install the answer is always no. Without an import, the first campaign opens
+with *"Buenas! Vi que me comentaste"* to people the owner has been talking to
+for months. So importing existing conversations is a prerequisite, not a
+nice-to-have.
+
+Two constraints shape it:
+
+- **Pace.** Reading two thousand conversations in ten minutes is the
+  mass-retrieval pattern that gets accounts flagged. `planImportStep()` spreads
+  it over days with a per-batch cap, and stops at an age cutoff.
+- **Scope.** Metadata for everyone (who, when, who spoke last) — that is all
+  dedup needs. Message bodies only for threads the playbook could still pick
+  up: ones the lead spoke in last, recent enough to be live. These are third
+  parties' messages and there is no reason to copy the whole inbox into
+  Postgres.
+
+## First run
+
+```bash
+npm install
+npm test                                    # 96 tests
+cp .env.example .env                        # fill in DATABASE_URL
+
+npm run check-session -w @donefy/agent
+```
+
+`check-session` opens the browser and verifies LinkedIn sees a live session.
+On the first run the profile is empty — a window opens, you log in by hand, and
+it persists from then on. **That login is the only manual step in the setup**,
+and running this before anything that sends is worth the minute: a dead session
+otherwise fails every job in the queue one at a time, each looking like a
+separate problem.
 
 Two branches carry most of the value:
 

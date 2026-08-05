@@ -10,11 +10,13 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "test": "npm run build && node --test dist/**/*.test.js"
+    "test": "npm run build && node --test dist/**/*.test.js",
+    "check-session": "npm run build && node dist/bin/check-session.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
     "@donefy/core": "*",
-    "@donefy/db": "*"
+    "@donefy/db": "*",
+    "playwright-core": "^1.62.1"
   }
 }
