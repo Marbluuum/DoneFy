@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { LEADS, STAGE_LABELS, STATE_LABELS, type FixtureLead } from '@/lib/fixtures'
+import { ReplyBar } from './reply-bar'
 
 /**
  * The inbox. The screen this product lives or dies on.
@@ -189,43 +190,12 @@ function QuickReplyBar({ lead }: { lead: FixtureLead }) {
   const blocked = lead.analysis?.autonomy === 'handoff'
 
   return (
-    <div className="border-t px-6 py-3" style={{ background: 'var(--panel)', borderColor: 'var(--border)' }}>
-      {blocked ? (
-        <div className="mb-3 rounded-lg border-l-2 border-rose-500 px-3 py-2 text-xs" style={{ background: 'var(--accent-soft)' }}>
-          <p className="font-medium">Sin respuestas sugeridas</p>
-          <p className="muted">{lead.analysis?.notes[0]}</p>
-        </div>
-      ) : replies.length > 0 ? (
-        <div className="mb-3 flex flex-wrap gap-2">
-          {replies.map((r) => (
-            <button
-              key={r.label}
-              className="group rounded-full border px-3 py-1.5 text-xs transition-colors hover:bg-[var(--accent-soft)]"
-              style={{ borderColor: 'var(--border)' }}
-              title={r.body}
-            >
-              {r.label}
-              {r.advances && <span className="ml-1.5 text-[10px] muted">→</span>}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="flex items-end gap-2">
-        <div
-          className="flex-1 rounded-xl border px-3 py-2 text-sm muted"
-          style={{ borderColor: 'var(--border)' }}
-        >
-          Escribí tu respuesta…
-        </div>
-        <button
-          className="rounded-xl px-4 py-2 text-sm font-medium text-white"
-          style={{ background: 'var(--accent)' }}
-        >
-          Enviar
-        </button>
-      </div>
-    </div>
+    <ReplyBar
+      replies={replies}
+      blockedReason={blocked ? lead.analysis?.notes[0] : undefined}
+      // Only the playbook decides this. The pitch is never auto-sendable.
+      autoAllowed={lead.stage === 'qualifying_company' || lead.stage === 'awaiting_booking'}
+    />
   )
 }
 

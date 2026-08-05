@@ -222,6 +222,70 @@ export const LEADS: FixtureLead[] = [
   },
 ]
 
+/**
+ * Posts synced by the agent.
+ *
+ * No browser extension involved: the agent already runs as the account owner
+ * on their own machine, so listing their own posts is just reading a page they
+ * are logged into. The extension other tools ship exists to lift the session
+ * cookie out to a server, which is a different problem, and not one this
+ * design has.
+ */
+export type FixturePost = {
+  id: string
+  excerpt: string
+  postedAt: string
+  reactions: number
+  comments: number
+  /** Comments that matched a keyword, if an automation covers this post. */
+  matched?: number
+  automation?: string
+}
+
+export const POSTS: FixturePost[] = [
+  {
+    id: 'p1',
+    excerpt: 'Las empresas de tecnología no tienen un problema de producto. Tienen un problema de distribución…',
+    postedAt: 'hace 2 días',
+    reactions: 214,
+    comments: 178,
+    matched: 96,
+    automation: 'Empresas de tecnología',
+  },
+  {
+    id: 'p2',
+    excerpt: 'Cold calling is NOT rocket science. So stop acting like it is…',
+    postedAt: 'hace 4 días',
+    reactions: 83,
+    comments: 419,
+    matched: 118,
+    automation: 'Empresas de tecnología',
+  },
+  {
+    id: 'p3',
+    excerpt: 'Salesforce en sueur. Claude Code + Twenty CRM, te dejo la metodología…',
+    postedAt: 'hace 6 días',
+    reactions: 68,
+    comments: 222,
+    matched: 98,
+    automation: 'Post CRM',
+  },
+  {
+    id: 'p4',
+    excerpt: 'Mapeé 3.300 family offices y esto es lo que aprendí sobre cómo compran…',
+    postedAt: 'hace 1 semana',
+    reactions: 141,
+    comments: 87,
+  },
+  {
+    id: 'p5',
+    excerpt: '5 años vendiendo software y el error que sigo viendo en cada pitch…',
+    postedAt: 'hace 2 semanas',
+    reactions: 96,
+    comments: 54,
+  },
+]
+
 export const FUNNEL = {
   comments: 312,
   replied: 312,
