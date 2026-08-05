@@ -44,10 +44,10 @@ replying in four seconds.
 
 | Package | Status | What it is |
 |---|---|---|
-| `packages/core` | ✅ built, 72 tests | State machine, quotas, timing, playbook, orchestrator, safety rails. Pure, no I/O |
+| `packages/core` | ✅ 72 tests | State machine, quotas, timing, playbook, orchestrator, safety rails. Pure, no I/O |
 | `packages/db` | ✅ schema | Drizzle schema for Postgres (Supabase) |
-| `packages/agent` | ⏳ next | Chrome driver + LinkedIn adapter |
-| `apps/web` | ⏳ after that | Next.js panel with the inbox and quick replies |
+| `packages/agent` | 🔨 LLM layer, 6 tests | Reply classifier + invite-note writer. Chrome driver next |
+| `apps/web` | ✅ 6 views | Next.js panel: inbox, pipeline, automations, dashboard, leads |
 
 ## The state machine
 
@@ -183,6 +183,35 @@ human, or contacted inside the last 90 days.
 
 Keyword matching is boundary-aware and accent-insensitive, so `GUÍA`, `guia!`
 and `"guia"` all match while `seguían` does not.
+
+## The LLM layer
+
+Two calls, configured differently because they carry different risk.
+
+**The classifier** reads each inbound reply and returns an intent, a confidence
+and any facts the lead volunteered. It runs on structured outputs, so the shape
+is valid by construction — but `parseClassification()` still runs on the result,
+because clamping confidence and distrusting an unrecognized intent label are not
+things a schema can express. It never writes the outgoing message: a misread
+reply produces a wrong route, which the confidence gate catches, instead of a
+wrong message already delivered. On an API error it returns `unclear` at zero
+confidence, which the orchestrator already knows how to handle.
+
+**The invite-note writer** produces the 300 characters that decide whether the
+invite is accepted — and acceptance rate is both the funnel's first gate and the
+signal the health breaker watches. Three guardrails:
+
+- **The limit is enforced here, not requested from the model.** LinkedIn cuts at
+  300 characters without asking, so a note that overruns is replaced by a plainer
+  one that fits rather than arriving severed mid-sentence.
+- **A failure never blocks the send.** An invite that never goes out because of a
+  rate limit is a lead lost for a reason the lead will never learn. The template
+  fallback is worse than a generated note and much better than silence.
+- **The lead's comment is fenced as untrusted input.** It is text written by a
+  stranger that lands inside a prompt; the instruction after the fence tells the
+  model to read it as information about interest, never as instructions.
+
+Both default to `claude-opus-5`, overridable per call site.
 
 Two branches carry most of the value:
 
