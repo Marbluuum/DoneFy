@@ -1,0 +1,24 @@
+{
+  "name": "donefy",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Inbound LinkedIn automation: comment keyword -> reply -> personalized invite -> qualified DM -> follow-ups",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "tsc --build",
+    "test": "node --test packages/core/dist/**/*.test.js",
+    "db:generate": "npm run db:generate -w @donefy/db",
+    "db:push": "npm run db:push -w @donefy/db"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

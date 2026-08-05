@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.next/
+*.tsbuildinfo
+
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+
+# Browser profile used by the agent. Contains the live LinkedIn session
+# cookie (li_at). Committing this would hand over full account access.
+.chrome-profile/
+agent-profile/
+
+# Local logs and screenshots captured on failures
+logs/
+screenshots/
+.DS_Store
