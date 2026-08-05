@@ -66,6 +66,38 @@ async function goTo(url: string, label: string) {
   console.log(`URL final: ${page.url()}`)
 }
 
+/**
+ * Lists LinkedIn's own `data-view-name` values on the page.
+ *
+ * These turned up while chasing the hashed class names, and they are worth
+ * more than any heuristic: LinkedIn attaches them for its own instrumentation,
+ * they say what a node *is* ("feed-full-update"), and instrumentation names
+ * are not churned the way styling hashes are. Where one exists it beats
+ * guessing at structure.
+ */
+async function dumpViewNames() {
+  const names = await page
+    .locator('[data-view-name]')
+    .evaluateAll((nodes) => {
+      const counts: Record<string, number> = {}
+      for (const node of nodes) {
+        const name = node.getAttribute('data-view-name') ?? ''
+        if (name) counts[name] = (counts[name] ?? 0) + 1
+      }
+      return Object.entries(counts).sort((a, b) => b[1] - a[1])
+    })
+    .catch(() => [] as [string, number][])
+
+  console.log(`\n  📋 data-view-name presentes (${names.length} distintos):`)
+  if (names.length === 0) {
+    console.log('     (ninguno)')
+    return
+  }
+  for (const [name, count] of names) {
+    console.log(`     ${String(count).padStart(4)}  [data-view-name="${name}"]`)
+  }
+}
+
 async function probe(groups: Record<string, readonly string[]>) {
   for (const [name, selectors] of Object.entries(groups)) {
     const lines: string[] = []
@@ -145,6 +177,7 @@ try {
 
   if (postUrl) {
     await goTo(postUrl, 'PUBLICACIÓN')
+    await dumpViewNames()
     await probe(SELECTORS.post)
 
     // The real test. Selector counts say whether an element was found; this
@@ -164,24 +197,29 @@ try {
     console.log('\n⚠️  Sin URL de publicación: los selectores de comentarios no se probaron.')
   }
 
-  // The withdraw control had no matching label, so list what the buttons on
-  // that page actually say rather than guessing at another aria-label.
   await goTo(URLS.sentInvitations, 'BOTONES EN INVITACIONES')
-  const buttonInfo = await page
+  await dumpViewNames()
+
+  // The first pass listed every button on the page and returned only chrome —
+  // nav, ads, the message overlay — because the withdraw controls live inside
+  // the invitation rows. Scoped to the rows, which [role="listitem"] identifies.
+  const rows = page.locator('[role="listitem"]')
+  const rowCount = await rows.count().catch(() => 0)
+  console.log(`\n  Filas [role="listitem"]: ${rowCount}`)
+
+  const rowButtons = await rows
     .locator('button')
     .evaluateAll((nodes) =>
-      nodes
-        .slice(0, 40)
-        .map((n) => ({
-          label: n.getAttribute('aria-label') ?? '',
-          text: (n.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 30),
-        }))
-        .filter((b) => b.label || b.text),
+      nodes.map((n) => ({
+        label: n.getAttribute('aria-label') ?? '',
+        text: (n.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 40),
+      })),
     )
     .catch(() => [])
 
+  console.log(`  Botones dentro de las filas: ${rowButtons.length}`)
   const seen = new Set<string>()
-  for (const b of buttonInfo) {
+  for (const b of rowButtons) {
     const key = `${b.label}|${b.text}`
     if (seen.has(key)) continue
     seen.add(key)

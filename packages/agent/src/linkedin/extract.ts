@@ -59,22 +59,50 @@ function extractCommentsInPage(replyLabels: string[]): Array<{
     const profileLink = best.querySelector<HTMLAnchorElement>('a[href*="/in/"]')
     if (!profileLink) continue
 
-    // The author's name is the link's own text; the headline is the sibling
-    // text next to it. Both are read as text so no class is involved.
-    const linkText = (profileLink.textContent ?? '').trim().replace(/\s+/g, ' ')
-    const authorName = linkText.split('\n')[0]?.trim() ?? ''
+    const clean = (text: string | null | undefined) => (text ?? '').trim().replace(/\s+/g, ' ')
+
+    // LinkedIn repeats the name inside the link for screen readers — "Wendy
+    // Castillo perfil Premium 1erWendy Castillo • 1er…" — so the visible name
+    // is the run before the first badge word rather than the link's full text.
+    const linkText = clean(profileLink.textContent)
+    const authorName =
+      linkText.split(/\s+(?:perfil|• )/)[0]?.trim() ??
+      clean(profileLink.getAttribute('aria-label'))
 
     const time = best.querySelector('time')
     const timeValue = time?.getAttribute('datetime') ?? null
 
-    // The comment body is the longest text block that is not the author's name
-    // or the action bar. Longest wins because names and buttons are short.
-    const candidates = Array.from(best.querySelectorAll<HTMLElement>('span[dir="ltr"], p, div'))
-      .map((el) => (el.textContent ?? '').trim().replace(/\s+/g, ' '))
-      .filter((text) => text.length > 0 && text !== authorName)
-      .filter((text) => !/^(Responder|Reply|Recomendar|Like|Me gusta)$/i.test(text))
+    /**
+     * The comment body.
+     *
+     * Taking the longest string in the container was wrong: the container's own
+     * text includes the name, the headline and the body concatenated, so the
+     * "longest" candidate was always the whole card. The body is instead the
+     * deepest element that owns its text — one whose children contribute
+     * nothing extra — which is where a leaf of real text actually lives.
+     */
+    const ownsItsText = (el: HTMLElement) => {
+      const text = clean(el.textContent)
+      if (!text) return false
+      const childText = Array.from(el.children)
+        .map((c) => clean(c.textContent))
+        .join('')
+      // Allow a little slack for markup inside the text (links, emoji spans).
+      return childText.length < text.length * 0.9
+    }
 
-    const body = candidates.reduce((longest, text) => (text.length > longest.length ? text : longest), '')
+    const noise = /^(Responder|Reply|Recomendar|Like|Me gusta|Autor|Premium|Verificado|\d+\s*(er|do|ro)|•)$/i
+
+    const leaves = Array.from(best.querySelectorAll<HTMLElement>('span, p, div'))
+      .filter(ownsItsText)
+      .map((el) => clean(el.textContent))
+      .filter((text) => text.length > 0 && !noise.test(text))
+      // The author's name and the headline appear before the body in the card;
+      // dropping anything that starts with the name removes both.
+      .filter((text) => !authorName || !text.startsWith(authorName))
+
+    const body = leaves.reduce((longest, text) => (text.length > longest.length ? text : longest), '')
+    const candidates = leaves
 
     // Any stable per-comment id LinkedIn exposes; falls back to the href plus
     // a body fingerprint, which is stable enough to dedupe replies against.
@@ -84,10 +112,10 @@ function extractCommentsInPage(replyLabels: string[]): Array<{
       best.querySelector('[data-id]')?.getAttribute('data-id') ??
       `${profileLink.getAttribute('href')}#${body.slice(0, 40)}`
 
-    // A headline sits between the name and the body — shorter than the body,
-    // longer than a button label.
+    // The headline is whatever else survived: shorter than the body, longer
+    // than a badge. Optional — it feeds ranking, never a send decision.
     const headline =
-      candidates.find((text) => text !== body && text.length > 3 && text.length < 200) ?? ''
+      candidates.find((text) => text !== body && text.length > 5 && text.length < 200) ?? ''
 
     results.push({
       urn,
