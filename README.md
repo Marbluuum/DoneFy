@@ -44,7 +44,7 @@ replying in four seconds.
 
 | Package | Status | What it is |
 |---|---|---|
-| `packages/core` | ✅ built, 32 tests | State machine, quotas, timing, conversation playbook. Pure, no I/O |
+| `packages/core` | ✅ built, 50 tests | State machine, quotas, timing, playbook, orchestrator. Pure, no I/O |
 | `packages/db` | ✅ schema | Drizzle schema for Postgres (Supabase) |
 | `packages/agent` | ⏳ next | Chrome driver + LinkedIn adapter |
 | `apps/web` | ⏳ after that | Next.js panel with the inbox and quick replies |
@@ -110,6 +110,46 @@ personalization actually pays — the 300-character invite note.
 The voice profile in `voice.ts` is extracted from real messages: one or two
 lines, no opening `¿`, first name plus `!`, ends on a question, and a banned
 list of the phrasings that give automation away.
+
+## The orchestrator
+
+`orchestrator.ts` sits between "a lead replied" and "something goes out":
+
+```
+lead replies
+    │
+    ▼
+classifier  ──▶  intent + confidence + signals   (classifier.ts, LLM)
+    │
+    ▼
+playbook    ──▶  next stage + how much autonomy that step deserves
+    │
+    ▼
+orchestrator ─▶  send  |  suggest  |  handoff  |  nothing
+```
+
+The model classifies; it never writes the outgoing message. A misread reply
+therefore produces a wrong *route*, which the confidence gate catches, instead
+of a wrong *message* already sitting in someone's inbox.
+
+Autonomy is the **lowest** of what the mode allows and what confidence earns:
+
+| Mode | Ceiling |
+|---|---|
+| `copilot` | everything is proposed — where you start |
+| `assisted` / `autopilot` | low-risk steps may send themselves |
+
+- Confidence below `confidenceFloor` (0.75) → downgraded to suggest.
+- Below `handoffFloor` (0.4) → a human reads it cold.
+- The pitch is `suggest` in every mode. Objections, questions and unclear
+  replies hand off in every mode.
+
+Guards that hold regardless of mode: never two messages without a reply in
+between, a cap on messages per conversation, opt-out wins over everything, and
+out-of-hours sends are deferred to the next window rather than dropped.
+
+Every downgrade is recorded in `notes`, so the panel can show why the agent did
+or did not act.
 
 Two branches carry most of the value:
 
