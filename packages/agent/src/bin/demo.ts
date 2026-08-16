@@ -12,30 +12,45 @@ import { eq } from 'drizzle-orm'
 
 import { createDb, linkedinAccounts } from '@linkfy/db'
 
-import { agentConfig, loadEnv } from '../config.js'
-import { clearDemo, runDemo, seedDemo } from '../demo/simulation.js'
+import { agentConfig, loadEnv, writeEnvValue } from '../config.js'
+import { clearDemo, ensureDemoAccount, runDemo, seedDemo } from '../demo/simulation.js'
 
 loadEnv()
 
 const config = agentConfig()
 
-if (!config.databaseUrl || !config.accountId) {
-  console.error('❌ Falta configuración. Corré `linkfy doctor` para ver qué.')
+if (!config.databaseUrl) {
+  console.error('❌ Falta DATABASE_URL. Corré `linkfy doctor` para ver qué.')
   process.exit(1)
 }
 
 const db = createDb(config.databaseUrl)
 
-const [account] = await db
-  .select({ id: linkedinAccounts.id, identifier: linkedinAccounts.publicIdentifier })
-  .from(linkedinAccounts)
-  .where(eq(linkedinAccounts.id, config.accountId))
-  .limit(1)
+/**
+ * The demo provisions its own account when none is connected.
+ *
+ * Requiring the LinkedIn login first would put the one step nobody can do on
+ * your behalf ahead of the thing that shows why it is worth doing — which is
+ * exactly where someone stops. `linkfy init` replaces this later.
+ */
+let accountId = config.accountId
+let provisioned = false
 
-if (!account) {
-  console.error('❌ No encontré tu cuenta. Corré `linkfy init`.')
-  process.exit(1)
+if (accountId) {
+  const [existing] = await db
+    .select({ id: linkedinAccounts.id })
+    .from(linkedinAccounts)
+    .where(eq(linkedinAccounts.id, accountId))
+    .limit(1)
+  if (!existing) accountId = ''
 }
+
+if (!accountId) {
+  accountId = await ensureDemoAccount(db)
+  provisioned = true
+}
+
+const account = { id: accountId }
 
 if (process.argv.includes('--limpiar')) {
   const removed = await clearDemo(db, account.id)
@@ -47,6 +62,12 @@ console.log('\nLinkfy — demo')
 console.log('═════════════\n')
 console.log('Corriendo el motor real contra un LinkedIn simulado.')
 console.log('No se toca tu cuenta: no se abre ningún navegador.\n')
+
+if (provisioned) {
+  writeEnvValue('LINKFY_ACCOUNT_ID', accountId)
+  console.log('Todavía no conectaste tu cuenta, así que creé una de demostración.')
+  console.log('Cuando corras `linkfy init`, se reemplaza por la tuya.\n')
+}
 
 await seedDemo(db, account.id)
 

@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync } from 'node:fs'
+import { accessSync, constants, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import {
@@ -175,6 +175,33 @@ function parseMode(value: string | undefined): OrchestratorMode {
   const modes: OrchestratorMode[] = ['copilot', 'assisted', 'autopilot']
   const found = modes.find((m) => m === value?.trim().toLowerCase())
   return found ?? 'copilot'
+}
+
+/**
+ * Writes one value into .env, replacing the line if it is already there.
+ *
+ * Appending instead would stack duplicates every time a command re-ran, and
+ * the last one wins silently — so a stale value that looks correct in the
+ * middle of the file is the one being ignored.
+ */
+export function writeEnvValue(key: string, value: string, path?: string): void {
+  const target = path ?? findEnvFile() ?? '.env'
+  const line = `${key}="${value}"`
+
+  let contents = ''
+  try {
+    contents = readFileSync(target, 'utf8')
+  } catch {
+    writeFileSync(target, `${line}\n`, 'utf8')
+    return
+  }
+
+  const pattern = new RegExp(`^${key}=.*$`, 'm')
+  writeFileSync(
+    target,
+    pattern.test(contents) ? contents.replace(pattern, line) : `${contents.trimEnd()}\n${line}\n`,
+    'utf8',
+  )
 }
 
 function positiveInt(value: string | undefined, fallback: number): number {

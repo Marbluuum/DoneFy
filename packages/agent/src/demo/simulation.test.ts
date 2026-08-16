@@ -9,7 +9,15 @@ import { eq } from 'drizzle-orm'
 
 import { automations, contacts, enrollments, linkedinAccounts, messages, users } from '@linkfy/db'
 
-import { CAST, clearDemo, DEMO_AUTOMATION, runDemo, seedDemo } from './simulation.js'
+import {
+  CAST,
+  clearDemo,
+  DEMO_AUTOMATION,
+  DEMO_IDENTIFIER,
+  ensureDemoAccount,
+  runDemo,
+  seedDemo,
+} from './simulation.js'
 
 /**
  * The demo is someone's first look at the product, and it writes to their real
@@ -157,4 +165,20 @@ test('clearing it leaves no demo behind, and keeps the contacts', async () => {
   // Contacts stay: a contact is a person, and the history is what keeps
   // somebody from being contacted twice later.
   assert.ok((await db.select({ id: contacts.id }).from(contacts)).length > 0)
+})
+
+test('the demo provisions its own account, so LinkedIn is not a precondition', async () => {
+  // The login is the one step nobody can do on someone's behalf. Requiring it
+  // before the thing that shows why it is worth doing puts the hardest part
+  // first, which is exactly where people stop.
+  const first = await ensureDemoAccount(db)
+  const again = await ensureDemoAccount(db)
+
+  assert.equal(first, again, 'no crea una cuenta nueva cada vez')
+
+  const [row] = await db
+    .select({ identifier: linkedinAccounts.publicIdentifier })
+    .from(linkedinAccounts)
+    .where(eq(linkedinAccounts.id, first))
+  assert.equal(row!.identifier, DEMO_IDENTIFIER)
 })

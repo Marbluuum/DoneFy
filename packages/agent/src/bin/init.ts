@@ -11,13 +11,11 @@
  * Writes LINKFY_ACCOUNT_ID into .env so nothing has to be copied by hand.
  */
 
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
-
 import { readSessionFromUrl } from '@linkfy/core'
 import { createDb, linkedinAccounts, users } from '@linkfy/db'
 import { and, eq } from 'drizzle-orm'
 
-import { agentConfig, loadEnv, resolveBrowser } from '../config.js'
+import { agentConfig, loadEnv, resolveBrowser, writeEnvValue } from '../config.js'
 import { launchBrowser, navigate } from '../linkedin/browser.js'
 
 loadEnv()
@@ -143,7 +141,7 @@ const accountId =
       .limit(1)
   )[0]!.id
 
-writeAccountId(accountId)
+writeEnvValue('LINKFY_ACCOUNT_ID', accountId)
 
 console.log(`✅ Cuenta conectada: ${displayName ?? publicIdentifier} (${publicIdentifier})`)
 console.log(`   LINKFY_ACCOUNT_ID guardado en .env`)
@@ -152,20 +150,3 @@ console.log('   npm run agent -w @linkfy/agent\n')
 
 process.exit(0)
 
-/** Replaces the line if it exists so re-running does not stack duplicates. */
-function writeAccountId(id: string): void {
-  const line = `LINKFY_ACCOUNT_ID="${id}"`
-  let contents = ''
-  try {
-    contents = readFileSync('.env', 'utf8')
-  } catch {
-    appendFileSync('.env', `\n${line}\n`)
-    return
-  }
-
-  if (/^LINKFY_ACCOUNT_ID=.*$/m.test(contents)) {
-    writeFileSync('.env', contents.replace(/^LINKFY_ACCOUNT_ID=.*$/m, line), 'utf8')
-  } else {
-    writeFileSync('.env', `${contents.trimEnd()}\n\n# --- Cuenta ---\n${line}\n`, 'utf8')
-  }
-}

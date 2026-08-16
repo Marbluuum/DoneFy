@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import type { PgDatabase } from 'drizzle-orm/pg-core'
 
 import { DEFAULT_WORKING_HOURS } from '@linkfy/core'
-import { automations, posts } from '@linkfy/db'
+import { automations, linkedinAccounts, posts, users } from '@linkfy/db'
 
 import type { LinkedInAdapter, PostComment } from '../linkedin/adapter.js'
 import { DrizzleRepository } from '../runner/repository.js'
@@ -223,6 +223,45 @@ export async function runDemo(options: {
   }
 
   return { actions, cycles }
+}
+
+export const DEMO_IDENTIFIER = 'demo-linkfy'
+const DEMO_EMAIL = 'demo@linkfy.local'
+
+/**
+ * An account for the demo to run under, when none is connected yet.
+ *
+ * Seeing the product work should not require logging into LinkedIn first.
+ * That login is the one step nobody can do on your behalf, and making it a
+ * precondition for the demo puts the hardest thing first — exactly where
+ * someone gives up. `linkfy init` replaces this with the real account.
+ */
+export async function ensureDemoAccount(db: AnyPgDatabase): Promise<string> {
+  const [user] = await db
+    .insert(users)
+    .values({ email: DEMO_EMAIL, name: 'Demo' })
+    .onConflictDoUpdate({ target: users.email, set: { name: 'Demo' } })
+    .returning({ id: users.id })
+
+  const [created] = await db
+    .insert(linkedinAccounts)
+    .values({ userId: user!.id, publicIdentifier: DEMO_IDENTIFIER, displayName: 'Cuenta de demostración' })
+    .onConflictDoNothing({ target: [linkedinAccounts.userId, linkedinAccounts.publicIdentifier] })
+    .returning({ id: linkedinAccounts.id })
+
+  if (created) return created.id
+
+  const [existing] = await db
+    .select({ id: linkedinAccounts.id })
+    .from(linkedinAccounts)
+    .where(
+      and(
+        eq(linkedinAccounts.userId, user!.id),
+        eq(linkedinAccounts.publicIdentifier, DEMO_IDENTIFIER),
+      ),
+    )
+    .limit(1)
+  return existing!.id
 }
 
 /** Creates the demo automation and the post it watches. Idempotent. */
