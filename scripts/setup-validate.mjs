@@ -14,6 +14,17 @@ export function validateDatabaseUrl(value) {
     return 'Todavía dice [YOUR-PASSWORD] — reemplazalo por tu contraseña real (los corchetes también).'
   }
   if (!trimmed.includes('@')) return 'No parece una URL de conexión completa.'
+  // Supabase's "Direct connection" host only has an AAAA record unless the
+  // IPv4 add-on is paid for, so on a home connection it fails as ENOTFOUND —
+  // an error that looks like the project does not exist. The pooler host
+  // resolves over IPv4 and is what this project wants anyway.
+  if (/@db\.[a-z0-9]+\.supabase\.co/i.test(trimmed)) {
+    return (
+      'Esa es la "Direct connection" y no resuelve por IPv4.\n' +
+      '      En Supabase → Connect → elegí "Session pooler".\n' +
+      '      El host termina en .pooler.supabase.com'
+    )
+  }
   return null
 }
 

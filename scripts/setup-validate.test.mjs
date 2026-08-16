@@ -26,6 +26,21 @@ test('a complete connection string is accepted', () => {
   )
 })
 
+test('the direct-connection host is caught before it fails as a DNS error', () => {
+  // It resolves over IPv6 only, so from a home connection it dies as
+  // ENOTFOUND — which reads like the project does not exist. The pooler host
+  // is the one that works, and Supabase offers both on the same screen.
+  const direct = 'postgresql://postgres:clave@db.rzqymqbzegnasyeaaxtc.supabase.co:5432/postgres'
+  assert.match(validateDatabaseUrl(direct) ?? '', /Session pooler/)
+
+  assert.equal(
+    validateDatabaseUrl(
+      'postgresql://postgres.rzqymqbzegnasyeaaxtc:clave@aws-0-us-east-1.pooler.supabase.com:5432/postgres',
+    ),
+    null,
+  )
+})
+
 test('something that is not a connection string is rejected with a reason', () => {
   assert.match(validateDatabaseUrl('') ?? '', /valor/)
   assert.match(validateDatabaseUrl('rzqymqbzegnasyeaaxtc') ?? '', /postgresql/)
