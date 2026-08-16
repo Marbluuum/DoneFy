@@ -21,7 +21,7 @@ import { launchBrowser } from '../linkedin/browser.js'
 import { PlaywrightLinkedInAdapter } from '../linkedin/playwright-adapter.js'
 import { classifyReply } from '../llm/classify.js'
 import { createLlm } from '../llm/client.js'
-import { writeInviteNote } from '../llm/invite-note.js'
+import { writeInviteNoteSafe } from '../llm/invite-note.js'
 import { runLoop } from '../runner/loop.js'
 import { DrizzleRepository } from '../runner/repository.js'
 import { runTick } from '../runner/tick.js'
@@ -110,7 +110,11 @@ const summary = await runLoop({
             voice: ENBI_VOICE,
           }),
       },
-      writer: { inviteNote: (input) => writeInviteNote(llm, input) },
+      // The `Safe` variant on purpose: a queued invite that never goes out
+      // because an API call failed is a lead lost for a reason the lead never
+      // learns. The template note is worse than a generated one and much
+      // better than silence.
+      writer: { inviteNote: (input) => writeInviteNoteSafe(llm, input) },
       workingHours: hours,
       mode: config.mode,
       now: () => new Date(),
