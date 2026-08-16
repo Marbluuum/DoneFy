@@ -33,6 +33,7 @@ import {
   type EnrollmentState,
   type HealthWindow,
   type JobType,
+  type OrchestratorMode,
   type QuickReply,
   type UsageSnapshot,
 } from '@linkfy/core'
@@ -59,6 +60,8 @@ import type {
 type AnyPgDatabase = PgDatabase<any, any, any>
 
 const TERMINAL = [...TERMINAL_STATES]
+
+const MODES: OrchestratorMode[] = ['copilot', 'assisted', 'autopilot']
 
 /**
  * States only reachable by an invitation having been accepted. Used for the
@@ -142,6 +145,7 @@ export class DrizzleRepository implements Repository {
         keywords: automations.keywords,
         postIds: automations.postIds,
         flow: automations.flow,
+        mode: automations.mode,
       })
       .from(automations)
       .where(and(eq(automations.accountId, accountId), eq(automations.status, 'active')))
@@ -166,6 +170,12 @@ export class DrizzleRepository implements Repository {
         keywords: row.keywords ?? [],
         postUrls: watched.map((p) => p.url),
         calendarUrl: calendarUrlFromFlow(row.flow),
+        // An unrecognised value falls back to the most cautious mode rather
+        // than throwing: this column decides whether messages go out in
+        // someone's name, so a bad value must fail closed.
+        mode: MODES.includes(row.mode as OrchestratorMode)
+          ? (row.mode as OrchestratorMode)
+          : 'copilot',
       })
     }
     return result

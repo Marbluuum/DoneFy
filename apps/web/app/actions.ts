@@ -248,3 +248,35 @@ export async function setAutomationStatus(
   revalidatePath('/automations')
   return { ok: true }
 }
+
+const MODES = ['copilot', 'assisted', 'autopilot'] as const
+
+/**
+ * How much this automation may do on its own.
+ *
+ * A ceiling, not an instruction: the step-level rules still apply underneath
+ * it, so the pitch never sends itself and a low-confidence read still waits,
+ * whatever this says.
+ */
+export async function setAutomationMode(
+  automationId: string,
+  mode: string,
+): Promise<ActionResult> {
+  if (!MODES.includes(mode as (typeof MODES)[number])) {
+    return { ok: false, error: 'Modo desconocido.' }
+  }
+
+  const ctx = await scope()
+  if (!ctx) return { ok: false, error: NOT_CONFIGURED }
+
+  const updated = await ctx.db
+    .update(automations)
+    .set({ mode, updatedAt: new Date() })
+    .where(and(eq(automations.id, automationId), eq(automations.accountId, ctx.accountId)))
+    .returning({ id: automations.id })
+
+  if (updated.length === 0) return { ok: false, error: 'Esa automatización no es de tu cuenta.' }
+
+  revalidatePath('/automations')
+  return { ok: true }
+}

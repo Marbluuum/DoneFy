@@ -3,6 +3,7 @@ CREATE TABLE "automations" (
 	"account_id" uuid NOT NULL,
 	"name" text NOT NULL,
 	"status" text DEFAULT 'paused' NOT NULL,
+	"mode" text DEFAULT 'copilot' NOT NULL,
 	"keywords" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"post_ids" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"flow" jsonb NOT NULL,

@@ -77,6 +77,17 @@ export const automations = pgTable('automations', {
   name: text('name').notNull(),
   status: text('status').notNull().default('paused'), // paused | active | archived
 
+  /**
+   * How much this automation may do unattended: copilot | assisted | autopilot.
+   *
+   * Per automation rather than per account, because the answer is not the same
+   * for every audience: a post that pulls in strangers wants everything
+   * proposed, while one aimed at people who already know you can run further on
+   * its own. Whatever it says, the step-level rules still apply — the pitch is
+   * never automatic.
+   */
+  mode: text('mode').notNull().default('copilot'),
+
   /** Keywords that fire this automation, lowercased. Empty = any comment. */
   keywords: jsonb('keywords').$type<string[]>().notNull().default([]),
 

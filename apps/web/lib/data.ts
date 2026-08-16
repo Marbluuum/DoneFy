@@ -49,6 +49,8 @@ export type PanelAutomation = {
   keywords: string[]
   postUrls: string[]
   calendarUrl: string
+  /** copilot | assisted | autopilot */
+  mode: string
   /** People this automation has pulled in, and how many booked. */
   enrolled: number
   booked: number
@@ -267,6 +269,7 @@ export async function getPanelData(): Promise<PanelData> {
       keywords: automations.keywords,
       postIds: automations.postIds,
       flow: automations.flow,
+      mode: automations.mode,
     })
     .from(automations)
     .where(eq(automations.accountId, account.id))
@@ -285,6 +288,7 @@ export async function getPanelData(): Promise<PanelData> {
       // words rather than showing as zero — zero reads as broken.
       postUrls: (row.postIds ?? []).map((id) => postUrlById.get(id) ?? '').filter(Boolean),
       calendarUrl: calendarUrlOf(row.flow),
+      mode: row.mode,
       enrolled: mine.length,
       booked: mine.filter((r) => r.state === 'booked').length,
     }

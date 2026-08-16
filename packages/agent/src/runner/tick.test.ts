@@ -60,6 +60,7 @@ function fakeRepo(state: FakeState): Repository {
         keywords: ['software'],
         postUrls: ['https://www.linkedin.com/posts/x'],
         calendarUrl: 'https://enbiconsulting.com/agenda-software',
+        mode: 'copilot' as const,
       },
     ],
     ownIdentifier: async () => 'martinbufczyk',

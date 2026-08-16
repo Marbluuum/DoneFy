@@ -5,6 +5,7 @@ import type {
   EnrollmentState,
   HealthWindow,
   JobType,
+  OrchestratorMode,
   QuickReply,
   UsageSnapshot,
 } from '@linkfy/core'
@@ -25,6 +26,8 @@ export type ActiveAutomation = {
   keywords: string[]
   postUrls: string[]
   calendarUrl: string
+  /** Autonomy ceiling for conversations that started here. */
+  mode: OrchestratorMode
 }
 
 export type PendingEnrollment = {

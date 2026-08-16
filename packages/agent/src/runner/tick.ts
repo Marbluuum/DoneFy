@@ -620,6 +620,7 @@ async function advanceConversations(
   log: (message: string, data?: Record<string, unknown>) => void,
 ): Promise<number> {
   const calendars = new Map(automations.map((a) => [a.id, a.calendarUrl]))
+  const modes = new Map(automations.map((a) => [a.id, a.mode]))
   const conversing = await deps.repo.conversingEnrollments(
     deps.accountId,
     deps.maxConversationsPerTick ?? 25,
@@ -669,10 +670,13 @@ async function advanceConversations(
       classification,
       {
         ...DEFAULT_POLICY,
-        // A thread switched to autopilot from the inbox loosens only itself,
-        // and only as far as the playbook already allows — the step-level
-        // rules still apply, so the pitch stays manual either way.
-        mode: enrollment.autoReply ? 'autopilot' : (deps.mode ?? 'copilot'),
+        // Three levels, most specific first: this one conversation switched to
+        // autopilot from the inbox, then the automation it came from, then the
+        // account-wide default. Each only ever raises the ceiling — the
+        // step-level rules still apply, so the pitch stays manual throughout.
+        mode: enrollment.autoReply
+          ? 'autopilot'
+          : (modes.get(enrollment.automationId) ?? deps.mode ?? 'copilot'),
         workingHours: deps.workingHours,
       },
       now,

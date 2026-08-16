@@ -1,5 +1,5 @@
 import { getPanelData } from '@/lib/data'
-import { NewAutomation, StatusToggle } from './automation-form'
+import { ModePicker, NewAutomation, StatusToggle } from './automation-form'
 
 /**
  * Automations, built from the account's own posts.
@@ -67,6 +67,8 @@ export default async function AutomationsPage() {
               </div>
               <StatusToggle id={a.id} status={a.status} live={live} />
             </div>
+
+            <ModePicker id={a.id} mode={a.mode} live={live} />
 
             {a.postUrls.length === 0 && (
               <p className="mt-2 text-[11px] muted">Vigila todas tus publicaciones</p>

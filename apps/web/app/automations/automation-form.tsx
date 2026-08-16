@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 
-import { createAutomation, setAutomationStatus } from '../actions'
+import { createAutomation, setAutomationMode, setAutomationStatus } from '../actions'
 
 /**
  * Creating an automation, in the panel.
@@ -172,5 +172,63 @@ export function StatusToggle({
     >
       {status === 'active' ? 'Pausar' : 'Activar'}
     </button>
+  )
+}
+
+
+const MODE_COPY: Record<string, { label: string; hint: string }> = {
+  copilot: { label: 'Copiloto', hint: 'Te propone todo, no manda nada solo' },
+  assisted: { label: 'Asistido', hint: 'Las preguntas de calificación salen solas' },
+  autopilot: { label: 'Automático', hint: 'Todo lo permitido sale sin esperarte' },
+}
+
+/**
+ * Autonomy, per automation.
+ *
+ * Shown as three named choices rather than a switch, because "on" and "off" is
+ * not what the setting does — the middle one is where most of this belongs and
+ * a two-state control has nowhere to put it.
+ */
+export function ModePicker({ id, mode, live }: { id: string; mode: string; live: boolean }) {
+  const [current, setCurrent] = useState(mode)
+  const [pending, startTransition] = useTransition()
+
+  function choose(next: string) {
+    const previous = current
+    setCurrent(next)
+    if (!live) return
+    startTransition(async () => {
+      const result = await setAutomationMode(id, next)
+      if (!result.ok) setCurrent(previous)
+    })
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="flex gap-1">
+        {Object.entries(MODE_COPY).map(([key, copy]) => (
+          <button
+            key={key}
+            onClick={() => choose(key)}
+            disabled={pending || !live}
+            title={copy.hint}
+            className="flex-1 rounded-lg border px-2 py-1 text-[11px] transition-colors disabled:opacity-60"
+            style={{
+              borderColor: current === key ? 'var(--accent)' : 'var(--border)',
+              background: current === key ? 'var(--accent-soft)' : 'transparent',
+            }}
+          >
+            {copy.label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 text-[11px] muted">{MODE_COPY[current]?.hint}</p>
+      {current === 'autopilot' && (
+        // Worth saying at the moment of choosing, because "automatic" sounds
+        // like it means everything, and the one message where being wrong
+        // costs the lead is the one it never sends.
+        <p className="mt-1 text-[11px] muted">La reunión te la sigue proponiendo a vos.</p>
+      )}
+    </div>
   )
 }

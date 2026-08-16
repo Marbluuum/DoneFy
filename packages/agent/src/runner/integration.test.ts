@@ -526,3 +526,68 @@ describe('invitaciones aceptadas', () => {
     assert.equal(row!.acceptanceCheckedAt, null, 'y se vuelve a intentar')
   })
 })
+
+describe('modo por automatización', () => {
+  test('an automation on autopilot sends the reply instead of proposing it', async () => {
+    // The mode is per automation because the answer is not the same for every
+    // audience — and it has to actually reach the orchestrator, or the setting
+    // is a switch wired to nothing.
+    await db.update(automations).set({ mode: 'autopilot' }).where(eq(automations.id, automationId))
+
+    const id = await enroll('modo-auto', 'Modo Auto')
+    await repo.setEnrollmentState(id, 'replied', null)
+    await repo.recordMessage({
+      contactId: await contactIdOf('modo-auto'),
+      enrollmentId: id,
+      channel: 'dm',
+      direction: 'inbound',
+      body: 'si, tenemos una empresa de software',
+      generated: false,
+    })
+
+    pendingInvites = []
+    inbox = []
+    const before = performed.filter((p) => p.startsWith('dm:')).length
+
+    // Two cycles: the first queues the reply, the second executes it.
+    await tick()
+    advance(10)
+    await tick()
+
+    assert.ok(
+      performed.filter((p) => p.startsWith('dm:')).length > before,
+      `esperaba que mandara solo: ${performed.slice(-4).join(' | ')}`,
+    )
+
+    await db.update(automations).set({ mode: 'copilot' }).where(eq(automations.id, automationId))
+  })
+
+  test('the pitch is never sent unattended, whatever the mode says', async () => {
+    // The one rule no mode overrides. Offering the meeting is where being
+    // wrong costs the lead rather than a slot.
+    await db.update(automations).set({ mode: 'autopilot' }).where(eq(automations.id, automationId))
+
+    const id = await enroll('modo-pitch', 'Modo Pitch')
+    await repo.setEnrollmentState(id, 'replied', null)
+    await repo.setStage(id, 'qualifying_pain')
+    await repo.recordMessage({
+      contactId: await contactIdOf('modo-pitch'),
+      enrollmentId: id,
+      channel: 'dm',
+      direction: 'inbound',
+      body: 'nos cuesta conseguir clientes nuevos',
+      generated: false,
+    })
+
+    const result = await tick()
+
+    const [row] = await db
+      .select({ suggestions: enrollments.suggestions })
+      .from(enrollments)
+      .where(eq(enrollments.id, id))
+
+    assert.ok(result.proposed > 0 || (row!.suggestions ?? []).length > 0, 'lo propone, no lo manda')
+
+    await db.update(automations).set({ mode: 'copilot' }).where(eq(automations.id, automationId))
+  })
+})

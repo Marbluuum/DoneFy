@@ -1,5 +1,5 @@
 {
-  "id": "a590b2ff-878a-4cea-97e2-9823d353182d",
+  "id": "62b924e1-30ba-4164-b570-14fbea531a13",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -33,6 +33,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'paused'"
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'copilot'"
         },
         "keywords": {
           "name": "keywords",
