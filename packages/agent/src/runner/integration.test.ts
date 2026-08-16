@@ -74,6 +74,10 @@ function fakeLinkedIn(): LinkedInAdapter {
   return {
     assertSignedIn: async () => {},
     readComments: async () => [COMMENT],
+    likeComment: async () => {
+      performed.push('like')
+      return true
+    },
     replyToComment: async (_url, _urn, body) => {
       performed.push(`reply:${body}`)
     },

@@ -132,6 +132,7 @@ function fakeAdapter(overrides: Partial<LinkedInAdapter> = {}, state?: FakeState
     assertSignedIn: async () => {},
     readComments: async () => state?.comments ?? [],
     replyToComment: async () => {},
+    likeComment: async () => true,
     readProfile: async (publicIdentifier) => ({
       publicIdentifier,
       fullName: 'Diego Perez',
@@ -362,4 +363,45 @@ test('a due enrollment gets its next job queued', async () => {
   const result = await runTick(deps(state))
   assert.equal(result.scheduled, 1)
   assert.equal(state.enqueued[0]?.type, 'reply_comment')
+})
+
+test('a like that fails does not cost the reply', async () => {
+  // The like is the smallest courtesy in the flow and the reply is the thing
+  // the person was promised. Letting a moved like button take the reply down
+  // with it trades something that matters for something that does not.
+  const state = baseState({
+    comments: [],
+    due: [],
+    jobs: [
+      {
+        id: 'job-1',
+        accountId: ACCOUNT,
+        enrollmentId: 'enr-1',
+        type: 'reply_comment',
+        payload: {
+          publicIdentifier: 'diego-perez',
+          postUrl: 'https://www.linkedin.com/posts/x',
+          commentUrn: 'c1',
+          nextState: 'comment_replied' as EnrollmentState,
+        },
+        attempts: 0,
+      },
+    ],
+  })
+
+  let replied = false
+  const result = await runTick(
+    deps(state, {
+      likeComment: async () => {
+        throw new Error('el botón de recomendar cambió')
+      },
+      replyToComment: async () => {
+        replied = true
+      },
+    }),
+  )
+
+  assert.equal(replied, true, 'respondió igual')
+  assert.equal(result.executed, 1)
+  assert.equal(result.failed, 0)
 })

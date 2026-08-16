@@ -72,6 +72,16 @@ export const SELECTORS = {
     // Verified live: aria-label matches, the class does not. Ordered so the
     // one that works is tried first.
     replyButton: ['button[aria-label*="Responder"]', 'button[aria-label*="Reply"]'],
+    /**
+     * The like on a comment. `aria-pressed` tells an already-liked comment
+     * from a fresh one, which is the difference between liking and *un*liking
+     * — the same button does both.
+     */
+    likeButton: [
+      'button[aria-label*="Recomendar el comentario"]',
+      'button[aria-label*="Like"][aria-label*="comment"]',
+      'button[aria-label*="Recomendar"]',
+    ],
     replyEditor: ['div[role="textbox"]', 'div.ql-editor[contenteditable="true"]'],
     replySubmit: ['button[type="submit"]', 'button.comments-comment-box__submit-button--cr'],
   },

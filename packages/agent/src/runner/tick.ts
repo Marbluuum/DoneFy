@@ -316,6 +316,14 @@ async function executeJob(
       const firstName = enrollment?.firstName ?? ''
       const body = `${firstName} enviado`.trim()
 
+      // Liked first, in the same page visit. It costs no navigation, it shows
+      // up in their notifications before the reply does, and not liking a
+      // comment you are about to answer is the part that looks automated.
+      // Deliberately not awaited into the failure path: see below.
+      await deps.linkedin
+        .likeComment(payload.postUrl!, payload.commentUrn!)
+        .catch(() => false)
+
       await deps.linkedin.replyToComment(payload.postUrl!, payload.commentUrn!, body)
       await deps.repo.countAction(deps.accountId, 'comment_reply', now)
       if (enrollment) {

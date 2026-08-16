@@ -137,6 +137,34 @@ export class PlaywrightLinkedInAdapter implements LinkedInAdapter {
     await page.waitForTimeout(2500)
   }
 
+  async likeComment(postUrl: string, commentUrn: string): Promise<boolean> {
+    const page = await this.page()
+    if (!page.url().startsWith(postUrl)) {
+      await this.pace()
+      await navigate(page, postUrl)
+      await page.waitForTimeout(4000)
+    }
+
+    const comments = await extractComments(page)
+    const index = comments.findIndex((c) => c.urn === commentUrn)
+    if (index === -1) return false
+
+    // Same document-order correspondence the reply uses: the nth comment the
+    // extractor returned is liked by the nth like button.
+    const buttons = page.locator(anyOf(SELECTORS.post.likeButton))
+    if ((await buttons.count()) <= index) return false
+
+    const button = buttons.nth(index)
+    // The same button unlikes. Pressing it on an already-liked comment would
+    // quietly remove a like the owner may have left by hand.
+    if ((await button.getAttribute('aria-pressed')) === 'true') return false
+
+    await this.pace()
+    await button.click()
+    await page.waitForTimeout(1200)
+    return true
+  }
+
   // --- profile ------------------------------------------------------------
 
   async readProfile(publicIdentifier: string): Promise<ProfileSummary> {

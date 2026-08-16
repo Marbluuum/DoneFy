@@ -61,6 +61,15 @@ export interface LinkedInAdapter {
   /** Public reply under a specific comment. */
   replyToComment(postUrl: string, commentUrn: string, body: string): Promise<void>
 
+  /**
+   * Likes a comment. Returns false when it was already liked.
+   *
+   * Never throws on failure: a like is the smallest courtesy in the flow, and
+   * losing the reply because the like button moved would trade something that
+   * matters for something that does not.
+   */
+  likeComment(postUrl: string, commentUrn: string): Promise<boolean>
+
   /** Degree, headline and company. The invite-vs-DM branch depends on degree. */
   readProfile(publicIdentifier: string): Promise<ProfileSummary>
 
