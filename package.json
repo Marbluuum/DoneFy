@@ -11,9 +11,10 @@
     "node": ">=22"
   },
   "scripts": {
+    "setup": "node scripts/setup.mjs",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "tsc --build",
-    "test": "npm run build && node --test \"packages/*/dist/**/*.test.js\"",
+    "test": "npm run build && node --test \"packages/*/dist/**/*.test.js\" \"scripts/*.test.mjs\"",
     "db:generate": "npm run db:generate -w @donefy/db",
     "db:push": "npm run db:push -w @donefy/db"
   },
