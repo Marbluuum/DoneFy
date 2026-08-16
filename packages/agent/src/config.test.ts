@@ -3,7 +3,11 @@ import { test } from 'node:test'
 
 import { DEFAULT_WORKING_HOURS } from '@linkfy/core'
 
-import { parseWorkingHours, resolveBrowser } from './config.js'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { findEnvFile, parseWorkingHours, resolveBrowser } from './config.js'
 
 test('a configured path that exists is used as given', () => {
   // Any executable will do — the point is that a real path is honoured.
@@ -47,4 +51,33 @@ test('las horas de trabajo toleran lo que uno escribe a mano', () => {
   assert.equal(parseWorkingHours('19:00-09:00').startHour, DEFAULT_WORKING_HOURS.startHour, 'invertido = default')
   assert.deepEqual(parseWorkingHours('', 'lunes,martes').activeDays, DEFAULT_WORKING_HOURS.activeDays)
   assert.deepEqual(parseWorkingHours('', '6,7').activeDays, [6, 7], 'el fin de semana es válido')
+})
+
+test('the .env is found from inside a workspace, not just from the repo root', () => {
+  // npm runs `npm run init -w @linkfy/agent` with the working directory set to
+  // packages/agent, while the file lives at the root. Looking only at the
+  // current directory reported "Falta DATABASE_URL" on an install that was
+  // configured correctly — the person did their part and was told they had not.
+  const root = mkdtempSync(join(tmpdir(), 'linkfy-'))
+  const workspace = join(root, 'packages', 'agent')
+  mkdirSync(workspace, { recursive: true })
+  writeFileSync(join(root, '.env'), 'DATABASE_URL="postgresql://x@y/z"\n')
+
+  assert.equal(findEnvFile(workspace), join(root, '.env'))
+  assert.equal(findEnvFile(root), join(root, '.env'))
+})
+
+test('the nearest .env wins over one further up', () => {
+  const root = mkdtempSync(join(tmpdir(), 'linkfy-'))
+  const nested = join(root, 'packages', 'agent')
+  mkdirSync(nested, { recursive: true })
+  writeFileSync(join(root, '.env'), 'DATABASE_URL="raiz"\n')
+  writeFileSync(join(nested, '.env'), 'DATABASE_URL="propio"\n')
+
+  assert.equal(findEnvFile(nested), join(nested, '.env'))
+})
+
+test('no .env anywhere is not an error', () => {
+  // The normal first-run state: setup has not been run yet.
+  assert.equal(findEnvFile(mkdtempSync(join(tmpdir(), 'linkfy-'))), null)
 })

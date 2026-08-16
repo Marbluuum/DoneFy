@@ -1,4 +1,5 @@
-import { accessSync, constants } from 'node:fs'
+import { accessSync, constants, existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 
 import {
   DEFAULT_WORKING_HOURS,
@@ -15,12 +16,40 @@ import {
  * ignored — the worst kind of setup failure, because the user did their part.
  */
 
-/** Node's own .env loader — no dependency, and a missing file is fine. */
-export function loadEnv(path = '.env'): void {
+/**
+ * Finds the .env by walking up from `startDir`.
+ *
+ * npm runs a workspace script with the working directory set to that
+ * workspace, so `npm run init -w @linkfy/agent` looks for the file in
+ * packages/agent while it actually lives at the repo root. Reading only the
+ * current directory meant a correctly configured install reported
+ * "Falta DATABASE_URL" — the worst kind of setup failure, because the person
+ * did their part and the tool told them they had not.
+ *
+ * Returns null when there is none, which is the normal first-run state.
+ */
+export function findEnvFile(startDir = process.cwd(), levels = 4): string | null {
+  let dir = startDir
+  for (let i = 0; i <= levels; i++) {
+    const candidate = join(dir, '.env')
+    if (existsSync(candidate)) return candidate
+
+    const parent = dirname(dir)
+    if (parent === dir) break // filesystem root
+    dir = parent
+  }
+  return null
+}
+
+/** Loads the .env if there is one. A missing file is fine. */
+export function loadEnv(startDir = process.cwd()): void {
+  const path = findEnvFile(startDir)
+  if (!path) return
   try {
     process.loadEnvFile(path)
   } catch {
-    // No .env is a normal state: the defaults below cover the first run.
+    // Unreadable or malformed: the defaults below still apply, and every
+    // consumer already reports which specific value it is missing.
   }
 }
 
