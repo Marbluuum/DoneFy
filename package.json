@@ -18,7 +18,8 @@
     "db:generate": "npm run db:generate -w @donefy/db",
     "db:push": "npm run db:push -w @donefy/db",
     "init": "npm run init -w @donefy/agent",
-    "agent": "npm run agent -w @donefy/agent"
+    "agent": "npm run agent -w @donefy/agent",
+    "automation": "npm run automation -w @donefy/agent --"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

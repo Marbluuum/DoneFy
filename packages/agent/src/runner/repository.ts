@@ -89,6 +89,15 @@ export type RepositoryOptions = {
    * Aires and hand back a fresh invite allowance at the worst possible moment.
    */
   timezone: string
+  /**
+   * The clock, shared with the tick.
+   *
+   * Reading `new Date()` here instead would let the repository disagree with
+   * the caller about what time it is — which sounds harmless until a row
+   * written as "due now" lands in the future relative to the scheduler that
+   * has to pick it up, and the flow never starts.
+   */
+  now?: () => Date
 }
 
 export function dayKey(date: Date, timeZone: string): string {
@@ -112,10 +121,14 @@ function rowsOf<T>(result: unknown): T[] {
 }
 
 export class DrizzleRepository implements Repository {
+  private readonly now: () => Date
+
   constructor(
     private readonly db: AnyPgDatabase,
     private readonly options: RepositoryOptions,
-  ) {}
+  ) {
+    this.now = options.now ?? (() => new Date())
+  }
 
   async activeAutomations(accountId: string): Promise<ActiveAutomation[]> {
     const rows = await this.db
@@ -238,7 +251,7 @@ export class DrizzleRepository implements Repository {
       })
       .onConflictDoUpdate({
         target: [contacts.accountId, contacts.publicIdentifier],
-        set: { fullName: input.fullName, headline: input.headline ?? null, updatedAt: new Date() },
+        set: { fullName: input.fullName, headline: input.headline ?? null, updatedAt: this.now() },
       })
       .returning({ id: contacts.id })
 
@@ -256,7 +269,7 @@ export class DrizzleRepository implements Repository {
         matchedKeyword: input.matchedKeyword,
         // Due immediately: the scheduler only looks at rows with a time on them,
         // and a fresh enrollment with nothing set would sit forever.
-        nextActionAt: new Date(),
+        nextActionAt: this.now(),
       })
       // One enrollment per contact per automation. Losing the race is the
       // correct outcome, not an error — the person is already in the flow.
@@ -437,7 +450,7 @@ export class DrizzleRepository implements Repository {
   async completeJob(jobId: string): Promise<void> {
     await this.db
       .update(jobs)
-      .set({ status: 'done', completedAt: new Date(), lastError: null })
+      .set({ status: 'done', completedAt: this.now(), lastError: null })
       .where(eq(jobs.id, jobId))
   }
 
@@ -461,7 +474,7 @@ export class DrizzleRepository implements Repository {
           lastError: error,
           leasedBy: null,
           leasedUntil: null,
-          runAfter: new Date(Date.now() + delayMs),
+          runAfter: new Date(this.now().getTime() + delayMs),
         })
         .where(eq(jobs.id, jobId))
       return
@@ -482,7 +495,7 @@ export class DrizzleRepository implements Repository {
         .set({
           attempts: sql`${enrollments.attempts} + 1`,
           lastError: error,
-          nextActionAt: new Date(),
+          nextActionAt: this.now(),
         })
         .where(eq(enrollments.id, job.enrollmentId))
     }
@@ -514,7 +527,7 @@ export class DrizzleRepository implements Repository {
   async setContactDegree(contactId: string, degree: number): Promise<void> {
     await this.db
       .update(contacts)
-      .set({ degree, updatedAt: new Date() })
+      .set({ degree, updatedAt: this.now() })
       .where(eq(contacts.id, contactId))
   }
 
@@ -579,7 +592,7 @@ export class DrizzleRepository implements Repository {
   }
 
   async healthWindow(accountId: string): Promise<HealthWindow> {
-    const since = new Date(Date.now() - HEALTH_WINDOW_DAYS * DAY_MS)
+    const since = new Date(this.now().getTime() - HEALTH_WINDOW_DAYS * DAY_MS)
 
     const invited = and(
       eq(automations.accountId, accountId),
