@@ -15,8 +15,8 @@ nota → detecta que aceptaron → DM → conversación con botonera o automáti
 PGlite (Postgres compilado a wasm) y el DOM se prueba contra Chromium con
 páginas sintéticas.
 
-Falta: retirar invitaciones vencidas para recuperar cupo, modo de autonomía por
-automatización, y el constructor visual de flujos.
+Falta: retirar invitaciones vencidas para recuperar cupo, y el constructor
+visual de flujos.
 
 ## Comandos
 
@@ -24,7 +24,7 @@ automatización, y el constructor visual de flujos.
 npm start          # hace lo que falte y levanta agente + panel (localhost:2500)
 npm run doctor     # diagnostica la cadena entera y dice qué está roto
 npm run demo       # llena el panel corriendo el motor contra un LinkedIn simulado
-npm test           # 194 tests
+npm test           # 209 tests
 npm run init       # conecta la cuenta de LinkedIn (abre Chrome)
 npm run db:push    # aplica el esquema
 ```
