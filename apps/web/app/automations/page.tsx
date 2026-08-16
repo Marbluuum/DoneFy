@@ -1,4 +1,4 @@
-import { POSTS } from '@/lib/fixtures'
+import { getPanelData } from '@/lib/data'
 
 /**
  * Automations, built from the account's own posts.
@@ -21,7 +21,8 @@ const AUTOMATIONS = [
   { name: 'Guía de outbound', keywords: ['guia'], status: 'paused' as const, posts: 0, enrolled: 0, booked: 0 },
 ]
 
-export default function AutomationsPage() {
+export default async function AutomationsPage() {
+  const { posts: POSTS } = await getPanelData()
   return (
     <div className="p-8">
       <header className="mb-5 flex items-start justify-between">

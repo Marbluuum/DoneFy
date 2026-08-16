@@ -1,8 +1,10 @@
 import Link from 'next/link'
 
-import { LEADS, STAGE_LABELS, STATE_LABELS } from '@/lib/fixtures'
+import { STAGE_LABELS, STATE_LABELS } from '@/lib/fixtures'
+import { getPanelData } from '@/lib/data'
 
-export default function LeadsPage() {
+export default async function LeadsPage() {
+  const { leads: LEADS } = await getPanelData()
   return (
     <div className="p-8">
       <header className="mb-5">

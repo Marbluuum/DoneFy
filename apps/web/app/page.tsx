@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
-import { FUNNEL, HEALTH, LEADS, STATE_LABELS } from '@/lib/fixtures'
+import { STATE_LABELS } from '@/lib/fixtures'
+import { getPanelData } from '@/lib/data'
 
 /**
  * Dashboard.
@@ -9,8 +10,9 @@ import { FUNNEL, HEALTH, LEADS, STATE_LABELS } from '@/lib/fixtures'
  * to tell whether any of this works, only that it ran.
  */
 
-export default function DashboardPage() {
-  const needsYou = LEADS.filter((l) => l.analysis?.autonomy === 'handoff' || l.unread)
+export default async function DashboardPage() {
+  const { leads: LEADS, funnel: FUNNEL, health: HEALTH } = await getPanelData()
+  const needsYou = LEADS.filter((l) => l.analysis?.autonomy === 'handoff' || l.unread || l.state === 'handed_off')
 
   const steps = [
     { label: 'Comentaron', value: FUNNEL.comments, of: FUNNEL.comments },

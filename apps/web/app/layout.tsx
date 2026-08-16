@@ -2,7 +2,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import './globals.css'
-import { HEALTH, LEADS, MODE } from '@/lib/fixtures'
+import { MODE } from '@/lib/fixtures'
+import { getPanelData } from '@/lib/data'
 
 export const metadata: Metadata = {
   title: 'DoneFy',
@@ -23,8 +24,9 @@ const MODE_COPY: Record<string, { label: string; hint: string }> = {
   autopilot: { label: 'Automático', hint: 'Todo lo permitido se envía solo' },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const unread = LEADS.filter((l) => l.unread).length
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const { leads, health: HEALTH } = await getPanelData()
+  const unread = leads.filter((l) => l.unread || l.state === 'replied').length
   const mode = MODE_COPY[MODE]!
 
   return (

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
-import { LEADS, STAGE_LABELS, STATE_LABELS, type FixtureLead } from '@/lib/fixtures'
+import { STAGE_LABELS, STATE_LABELS, type FixtureLead } from '@/lib/fixtures'
+import { getPanelData } from '@/lib/data'
 import { ReplyBar } from './reply-bar'
 
 /**
@@ -59,18 +60,34 @@ export default async function InboxPage({
   searchParams: Promise<{ lead?: string }>
 }) {
   const params = await searchParams
-  const active = LEADS.find((l) => l.id === params.lead) ?? LEADS[0]!
+  const { leads } = await getPanelData()
+  const active = leads.find((l) => l.id === params.lead) ?? leads[0]
+
+  // Before the first lead arrives this page has nothing to show, and rendering
+  // an empty three-column shell reads like something is broken.
+  if (!active) {
+    return (
+      <div className="flex h-screen items-center justify-center p-8">
+        <div className="max-w-sm text-center">
+          <h1 className="mb-2 text-lg font-semibold">Todavía no hay conversaciones</h1>
+          <p className="text-sm muted">
+            Cuando alguien comente la palabra clave en uno de tus posts, va a aparecer acá.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen">
-      <ConversationList activeId={active.id} />
+      <ConversationList leads={leads} activeId={active.id} />
       <Thread lead={active} />
       <SidePanel lead={active} />
     </div>
   )
 }
 
-function ConversationList({ activeId }: { activeId: string }) {
+function ConversationList({ leads: LEADS, activeId }: { leads: FixtureLead[]; activeId: string }) {
   return (
     <div
       className="flex w-80 shrink-0 flex-col border-r"

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
-import { LEADS, type FixtureLead } from '@/lib/fixtures'
+import { type FixtureLead } from '@/lib/fixtures'
+import { getPanelData } from '@/lib/data'
 
 /**
  * Pipeline.
@@ -58,7 +59,8 @@ const COLUMNS: Array<{
   },
 ]
 
-export default function PipelinePage() {
+export default async function PipelinePage() {
+  const { leads: LEADS } = await getPanelData()
   return (
     <div className="flex h-screen flex-col p-8">
       <header className="mb-5">
