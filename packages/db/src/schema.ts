@@ -141,6 +141,15 @@ export const enrollments = pgTable('enrollments', {
    */
   stage: text('stage'),
 
+  /**
+   * When the agent last looked at whether this invitation was accepted.
+   *
+   * Acceptance arrives as no event at all — LinkedIn just makes you a 1st
+   * degree connection — so it has to be polled, and polling every pending
+   * invite on every cycle is a page visit per lead per 90 seconds.
+   */
+  acceptanceCheckedAt: timestamp('acceptance_checked_at', { withTimezone: true }),
+
   /** LinkedIn's thread id, so replies are read from the right conversation. */
   threadId: text('thread_id'),
 

@@ -1,5 +1,5 @@
 {
-  "id": "5d30973c-dc89-44ef-b3c6-384d7bffa2e5",
+  "id": "a590b2ff-878a-4cea-97e2-9823d353182d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -249,6 +249,12 @@
         "stage": {
           "name": "stage",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "acceptance_checked_at": {
+          "name": "acceptance_checked_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },

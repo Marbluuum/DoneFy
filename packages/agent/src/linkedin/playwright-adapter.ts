@@ -14,6 +14,7 @@ import { assertSignedIn, findFirst, navigate, requireFirst, typeHumanly } from '
 import {
   extractComments,
   extractConversations,
+  extractPendingInvites,
   extractThreadMessages,
   findSendButton,
 } from './extract.js'
@@ -239,6 +240,13 @@ export class PlaywrightLinkedInAdapter implements LinkedInAdapter {
     await page.waitForTimeout(2000)
 
     return { sent: true, withNote }
+  }
+
+  async listPendingInvites(): Promise<string[]> {
+    const page = await this.page()
+    await this.pace()
+    await navigate(page, URLS.sentInvitations)
+    return extractPendingInvites(page)
   }
 
   async withdrawInvite(_publicIdentifier: string): Promise<boolean> {

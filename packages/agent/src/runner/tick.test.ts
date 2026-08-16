@@ -39,6 +39,8 @@ type FakeState = {
   states: Array<{ id: string; state: EnrollmentState }>
   failures: Array<{ jobId: string; retryable: boolean }>
   invited: string[]
+  awaitingAcceptance: PendingEnrollment[]
+  pendingInvites: string[]
   actions: string[]
   health: { accepted: number; resolved: number; failures: number; attempted: number }
   contacts: Record<string, Partial<import('./ports.js').ContactSnapshot>>
@@ -95,6 +97,8 @@ function fakeRepo(state: FakeState): Repository {
     markInvited: async (id) => {
       state.invited.push(id)
     },
+    invitesAwaitingAcceptance: async () => state.awaitingAcceptance,
+    markAcceptanceChecked: async () => {},
     setContactDegree: async () => {},
     recordMessage: async () => {},
     usage: async () => ({ today: { invite: 0, dm: 0, comment_reply: 0 }, invitesTrailingWeek: 0 }),
@@ -134,6 +138,7 @@ function fakeAdapter(overrides: Partial<LinkedInAdapter> = {}, state?: FakeState
       degree: 2,
     }),
     sendInvite: async () => ({ sent: true, withNote: true }),
+    listPendingInvites: async () => state?.pendingInvites ?? [],
     withdrawInvite: async () => true,
     sendMessage: async () => {},
     listConversations: async () => [],
@@ -152,6 +157,8 @@ function baseState(overrides: Partial<FakeState> = {}): FakeState {
     states: [],
     failures: [],
     invited: [],
+    awaitingAcceptance: [],
+    pendingInvites: [],
     conversing: [],
     threads: {},
     stages: [],

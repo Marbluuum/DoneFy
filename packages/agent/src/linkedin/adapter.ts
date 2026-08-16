@@ -67,6 +67,15 @@ export interface LinkedInAdapter {
   /** Connection request. `note` is capped at 300 characters by the caller. */
   sendInvite(publicIdentifier: string, note?: string): Promise<InviteResult>
 
+  /**
+   * Everyone with an invitation still outstanding.
+   *
+   * Read as a set rather than per profile: acceptance is otherwise invisible,
+   * and checking it one profile at a time costs a page visit per pending
+   * invite on every cycle.
+   */
+  listPendingInvites(): Promise<string[]>
+
   /** Withdraws a pending invite to free room under the weekly cap. */
   withdrawInvite(publicIdentifier: string): Promise<boolean>
 

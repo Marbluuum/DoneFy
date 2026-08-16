@@ -270,3 +270,32 @@ export async function findSendButton(page: Page) {
 
   return page.locator('button[aria-label*="Enviar"], button[aria-label*="Send"]').last()
 }
+
+/** Runs in the page. Keep self-contained: no imports, no closures. */
+function extractPendingInvitesInPage(): string[] {
+  // The sent-invitations page has no stable container names either, but every
+  // row is anchored on a link to the invited profile. Scoped to <main> so the
+  // navigation bar's own profile link does not count as an invitation.
+  const root = document.querySelector('main') ?? document.body
+  const hrefs = Array.from(root.querySelectorAll<HTMLAnchorElement>('a[href*="/in/"]'))
+  return hrefs.map((a) => a.getAttribute('href') ?? '')
+}
+
+/**
+ * Public identifiers with an invitation still pending.
+ *
+ * One page read covers every outstanding invite, which is the whole point:
+ * the alternative is visiting up to eighty profiles to learn that nothing
+ * changed.
+ *
+ * Absence from this list is treated as a hint, never as proof — a selector
+ * change or a half-loaded page also produces an empty list, and acting on that
+ * directly would mark every pending invitation as resolved at once.
+ */
+export async function extractPendingInvites(page: Page): Promise<string[]> {
+  const hrefs = await page.evaluate(extractPendingInvitesInPage)
+  const identifiers = hrefs
+    .map((href) => publicIdentifierFromHref(href))
+    .filter((identifier) => identifier.length > 0)
+  return [...new Set(identifiers)]
+}

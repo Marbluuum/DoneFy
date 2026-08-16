@@ -12,6 +12,7 @@ const OK: TickResult = {
   failed: 0,
   inbound: 0,
   proposed: 0,
+  accepted: 0,
   skipped: [],
 }
 

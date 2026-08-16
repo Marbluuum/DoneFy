@@ -123,6 +123,11 @@ export interface Repository {
 
   setEnrollmentState(enrollmentId: string, state: EnrollmentState, nextActionAt: Date | null): Promise<void>
 
+  /** Sent invitations not yet known to be accepted, least recently checked first. */
+  invitesAwaitingAcceptance(accountId: string, before: Date, limit: number): Promise<PendingEnrollment[]>
+
+  markAcceptanceChecked(enrollmentId: string, at: Date): Promise<void>
+
   /** Stamps when an invitation actually went out, for the acceptance rate. */
   markInvited(enrollmentId: string, at: Date): Promise<void>
 

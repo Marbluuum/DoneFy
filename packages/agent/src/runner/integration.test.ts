@@ -37,6 +37,7 @@ let pg: PGlite
 let db: ReturnType<typeof drizzle>
 let repo: DrizzleRepository
 let accountId: string
+let automationId: string
 
 /** Everything the fake LinkedIn was asked to do, in order. */
 const performed: string[] = []
@@ -50,6 +51,15 @@ const COMMENT: PostComment = {
 }
 
 const POST_URL = 'https://www.linkedin.com/feed/update/urn:li:activity:7000'
+
+/**
+ * Who still has an outstanding invitation, per LinkedIn. Defaults to the leads
+ * the earlier tests invite, so reconciliation leaves them alone.
+ */
+let pendingInvites: string[] = ['wendy-torres', 'piero-storace']
+
+/** Connection degree per profile. Anyone not listed is a 2nd degree stranger. */
+const degrees: Record<string, number> = {}
 
 /** What LinkedIn's inbox is showing this cycle. Set per test. */
 let inbox: Array<{
@@ -69,12 +79,13 @@ function fakeLinkedIn(): LinkedInAdapter {
     },
     readProfile: async (publicIdentifier) => {
       performed.push('profile')
-      return { publicIdentifier, fullName: 'Wendy Torres', degree: 2 }
+      return { publicIdentifier, fullName: 'Wendy Torres', degree: degrees[publicIdentifier] ?? 2 }
     },
     sendInvite: async (_id, note) => {
       performed.push(`invite:${note ?? ''}`)
       return { sent: true, withNote: Boolean(note) }
     },
+    listPendingInvites: async () => pendingInvites,
     withdrawInvite: async () => true,
     sendMessage: async (_id, body) => {
       performed.push(`dm:${body}`)
@@ -149,15 +160,30 @@ before(async () => {
   accountId = account!.id
 
   await db.insert(posts).values({ accountId, urn: POST_URL, url: POST_URL })
-  await db.insert(automations).values({
+  const [automation] = await db.insert(automations).values({
     accountId,
     name: 'Guía',
     status: 'active',
     keywords: ['guia'],
     postIds: [],
     flow: { nodes: [], edges: [] },
-  })
+  }).returning({ id: automations.id })
+  automationId = automation!.id
 })
+
+/** Creates an enrollment directly, for states a scan cannot produce. */
+async function enroll(identifier: string, name: string): Promise<string> {
+  return repo.createEnrollment({
+    accountId,
+    automationId,
+    publicIdentifier: identifier,
+    fullName: name,
+    commentUrn: `urn:li:comment:${identifier}`,
+    commentText: 'guia',
+    matchedKeyword: 'guia',
+    postUrl: POST_URL,
+  })
+}
 
 after(async () => {
   await pg?.close()
@@ -422,3 +448,77 @@ async function countMessages(identifier: string): Promise<number> {
     .where(eq(messages.contactId, await contactIdOf(identifier)))
   return rows.length
 }
+
+describe('invitaciones aceptadas', () => {
+  test('someone who accepted stops being pending and gets the DM queued', async () => {
+    // Acceptance produces no event: LinkedIn just makes you a 1st degree
+    // connection. Without this the lead who said yes waits forever for a
+    // message nobody ever queued — the quietest way to lose a warm lead.
+    const id = await enroll('acepto-rapido', 'Aceptó Rápido')
+    await repo.markInvited(id, clock)
+    await repo.setEnrollmentState(id, 'invite_sent', null)
+
+    degrees['acepto-rapido'] = 1
+    pendingInvites = [] // ya no figura como pendiente
+    inbox = []
+
+    const result = await tick()
+    assert.equal(result.accepted, 1)
+
+    const [row] = await db.select().from(enrollments).where(eq(enrollments.id, id))
+    assert.equal(row!.state, 'connected')
+    assert.ok(row!.acceptanceCheckedAt, 'quedó registrado el chequeo')
+  })
+
+  test('someone still pending costs no profile visit', async () => {
+    // Eighty outstanding invitations must not mean eighty page loads a cycle.
+    const id = await enroll('sigue-esperando', 'Sigue Esperando')
+    await repo.markInvited(id, clock)
+    await repo.setEnrollmentState(id, 'invite_sent', null)
+
+    pendingInvites = ['sigue-esperando']
+    const before = performed.filter((p) => p === 'profile').length
+
+    await tick()
+
+    assert.equal(performed.filter((p) => p === 'profile').length, before, 'no miró el perfil')
+    const [row] = await db.select().from(enrollments).where(eq(enrollments.id, id))
+    assert.equal(row!.state, 'invite_sent')
+  })
+
+  test('a checked invitation is not re-checked on the next cycle', async () => {
+    // Otherwise every pending invitation is polled every 90 seconds forever.
+    const result = await tick()
+    assert.equal(result.accepted, 0)
+  })
+
+  test('an unreadable invitations page resolves nothing', async () => {
+    // The dangerous failure. An empty list looks exactly like "nobody is
+    // pending", and treating it as truth would mark every outstanding
+    // invitation as resolved at once.
+    const id = await enroll('no-tocar', 'No Tocar')
+    await repo.markInvited(id, clock)
+    await repo.setEnrollmentState(id, 'invite_sent', null)
+
+    const result = await runTick({
+      accountId,
+      repo,
+      linkedin: {
+        ...fakeLinkedIn(),
+        listPendingInvites: async () => {
+          throw new Error('la página no cargó')
+        },
+      },
+      classifier: { classify: async () => ({ intent: 'unclear' as const, confidence: 0, signals: {}, rationale: '' }) },
+      writer: { inviteNote: async () => 'nota' },
+      workingHours: DEFAULT_WORKING_HOURS,
+      now: () => clock,
+      leaseHolder: 'test',
+    })
+
+    assert.equal(result.accepted, 0)
+    const [row] = await db.select().from(enrollments).where(eq(enrollments.id, id))
+    assert.equal(row!.state, 'invite_sent', 'sigue esperando, no se dio por vencida')
+    assert.equal(row!.acceptanceCheckedAt, null, 'y se vuelve a intentar')
+  })
+})

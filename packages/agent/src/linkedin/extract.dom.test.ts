@@ -3,7 +3,7 @@ import { after, before, test } from 'node:test'
 
 import { chromium, type Browser, type Page } from 'playwright'
 
-import { extractComments } from './extract.js'
+import { extractComments, extractPendingInvites } from './extract.js'
 
 /**
  * Runs the extractor against a synthetic DOM built to match what LinkedIn
@@ -130,4 +130,39 @@ test('a long comment is still preferred over the headline', async (t) => {
   if (!found) return
   const gabo = found.find((c) => c.authorPublicIdentifier === 'gabo-duran')
   assert.equal(gabo?.body, 'sistema, me interesa mucho como lo hacen')
+})
+
+test('pending invitations are read from the profile links, not a container name', async (t) => {
+  if (!page) {
+    t.skip(`sin navegador: ${unavailable}`)
+    return
+  }
+
+  // The sent-invitations page ships hashed class names like everything else,
+  // so the only stable anchor is the link to the invited profile. Scoped to
+  // <main> because the navigation bar links to the owner's own profile, and
+  // counting that would look like an invitation to yourself.
+  await page.setContent(`<html><body>
+    <nav><a href="/in/martinbufczyk/">Yo</a></nav>
+    <main>
+      <ul>
+        <li><a href="/in/wendy-torres/">Wendy Torres</a>
+            <a href="/in/wendy-torres/">foto</a></li>
+        <li><a href="/in/piero-storace?trk=x">Piero Storace</a></li>
+      </ul>
+    </main>
+  </body></html>`)
+
+  const pending = await extractPendingInvites(page)
+  assert.deepEqual(pending.sort(), ['piero-storace', 'wendy-torres'])
+})
+
+test('an invitations page with nobody on it reads as empty, not as an error', async (t) => {
+  if (!page) {
+    t.skip(`sin navegador: ${unavailable}`)
+    return
+  }
+
+  await page.setContent('<html><body><main><p>No tenés invitaciones pendientes</p></main></body></html>')
+  assert.deepEqual(await extractPendingInvites(page), [])
 })

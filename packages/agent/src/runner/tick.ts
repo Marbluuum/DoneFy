@@ -26,8 +26,9 @@ import type { Classifier, NoteWriter, PendingEnrollment, Repository } from './po
  *   2. scan     — find new keyword comments and enroll who qualifies
  *   3. listen   — read what leads wrote back
  *   4. converse — let the playbook answer, or propose an answer
- *   5. schedule — ask the engine what each enrollment needs next
- *   6. execute  — do the queued work
+ *   5. reconcile— notice who accepted the invitation
+ *   6. schedule — ask the engine what each enrollment needs next
+ *   7. execute  — do the queued work
  *
  * Health first because every later phase can send something, and a restricted
  * account should discover that before it acts, not after. Scanning before
@@ -59,6 +60,8 @@ export type TickDeps = {
   maxJobsPerTick?: number
   maxEnrollmentsPerTick?: number
   maxConversationsPerTick?: number
+  /** Profile visits spent per cycle confirming acceptances. */
+  maxAcceptanceChecksPerTick?: number
   log?: (message: string, data?: Record<string, unknown>) => void
 }
 
@@ -72,6 +75,8 @@ export type TickResult = {
   inbound: number
   /** Replies the agent proposed rather than sent. */
   proposed: number
+  /** Invitations found to have been accepted this cycle. */
+  accepted: number
   skipped: string[]
 }
 
@@ -86,6 +91,7 @@ export async function runTick(deps: TickDeps): Promise<TickResult> {
     failed: 0,
     inbound: 0,
     proposed: 0,
+    accepted: 0,
     skipped: [],
   }
 
@@ -177,7 +183,13 @@ export async function runTick(deps: TickDeps): Promise<TickResult> {
   // --- 4. converse ------------------------------------------------------
   result.proposed += await advanceConversations(deps, automations, now, log)
 
-  // --- 5. schedule ------------------------------------------------------
+  // --- 5. reconcile -----------------------------------------------------
+  // Acceptance produces no event of any kind: LinkedIn simply makes you a 1st
+  // degree connection. Nothing here would ever notice, and the lead who said
+  // yes would wait forever for a DM that was never queued.
+  result.accepted += await reconcileInvites(deps, now, log)
+
+  // --- 6. schedule ------------------------------------------------------
   const due = await deps.repo.dueEnrollments(deps.accountId, now, 100)
   const usage = await deps.repo.usage(deps.accountId, now)
 
@@ -227,7 +239,7 @@ export async function runTick(deps: TickDeps): Promise<TickResult> {
     }
   }
 
-  // --- 6. execute -------------------------------------------------------
+  // --- 7. execute -------------------------------------------------------
   const jobs = await deps.repo.claimJobs(
     deps.accountId,
     now,
@@ -490,6 +502,88 @@ async function readInbound(
   }
 
   return recorded
+}
+
+/** How long before a pending invitation is worth looking at again. */
+const ACCEPTANCE_RECHECK_MS = 6 * 60 * 60 * 1000
+
+/**
+ * Notices which invitations were accepted.
+ *
+ * Two steps, because each alone is wrong. The sent-invitations page lists
+ * everyone still pending in one read — cheap, but its absences are not proof:
+ * a changed selector or a half-loaded page produces an empty list too, and
+ * acting on that directly would mark every outstanding invitation as accepted
+ * at once. So absence only selects who is worth a profile visit, and the
+ * profile — where the degree is stated outright — decides.
+ *
+ * Anyone still listed as pending costs nothing but a timestamp.
+ */
+async function reconcileInvites(
+  deps: TickDeps,
+  now: Date,
+  log: (message: string, data?: Record<string, unknown>) => void,
+): Promise<number> {
+  const candidates = await deps.repo.invitesAwaitingAcceptance(
+    deps.accountId,
+    new Date(now.getTime() - ACCEPTANCE_RECHECK_MS),
+    deps.maxAcceptanceChecksPerTick ?? 5,
+  )
+  if (candidates.length === 0) return 0
+
+  let pending: Set<string>
+  try {
+    pending = new Set(await deps.linkedin.listPendingInvites())
+  } catch (error) {
+    // Unreadable is not "nobody is pending". Leaving the timestamps alone
+    // means the same candidates come back next cycle instead of every
+    // outstanding invitation being resolved on a bad page load.
+    log('no se pudo leer la lista de invitaciones enviadas', { error: String(error) })
+    return 0
+  }
+
+  let accepted = 0
+
+  for (const enrollment of candidates) {
+    if (pending.has(enrollment.publicIdentifier)) {
+      await deps.repo.markAcceptanceChecked(enrollment.id, now)
+      continue
+    }
+
+    const profile = await deps.linkedin
+      .readProfile(enrollment.publicIdentifier)
+      .catch(() => null)
+
+    // Unreadable profile: no timestamp, so it is retried rather than being
+    // silently written off as a declined invitation.
+    if (!profile) continue
+
+    await deps.repo.markAcceptanceChecked(enrollment.id, now)
+    if (profile.degree) await deps.repo.setContactDegree(enrollment.contactId, profile.degree)
+
+    if (profile.degree === 1) {
+      // `connected` rather than straight to the DM: the engine holds it for a
+      // couple of hours first, because nothing reads as automated like a
+      // message that lands the second someone accepts.
+      await deps.repo.setEnrollmentState(enrollment.id, 'connected', now)
+      await deps.repo.recordEvent(deps.accountId, 'invite_accepted', {
+        enrollment: enrollment.id,
+        lead: enrollment.publicIdentifier,
+      })
+      accepted++
+      continue
+    }
+
+    // Gone from the pending list and still not connected: withdrawn from the
+    // other side, declined, or expired. The slot is free either way.
+    await deps.repo.setEnrollmentState(enrollment.id, 'invite_expired', null)
+    await deps.repo.recordEvent(deps.accountId, 'invite_resolved_unaccepted', {
+      enrollment: enrollment.id,
+      lead: enrollment.publicIdentifier,
+    })
+  }
+
+  return accepted
 }
 
 /** The stage a conversation starts in, before anything has been read. */

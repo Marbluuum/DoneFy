@@ -6,7 +6,9 @@ import {
   gte,
   inArray,
   isNotNull,
+  isNull,
   lte,
+  or,
   max,
   notInArray,
   sql,
@@ -528,6 +530,32 @@ export class DrizzleRepository implements Repository {
         enteredStateAt: sql`CASE WHEN ${enrollments.state} = ${state}
                                  THEN ${enrollments.enteredStateAt} ELSE now() END`,
       })
+      .where(eq(enrollments.id, enrollmentId))
+  }
+
+  async invitesAwaitingAcceptance(
+    accountId: string,
+    before: Date,
+    limit: number,
+  ): Promise<PendingEnrollment[]> {
+    return this.selectEnrollments(
+      and(
+        eq(automations.accountId, accountId),
+        eq(enrollments.state, 'invite_sent'),
+        isNotNull(enrollments.invitedAt),
+        or(
+          isNull(enrollments.acceptanceCheckedAt),
+          lte(enrollments.acceptanceCheckedAt, before),
+        ),
+      ),
+      limit,
+    )
+  }
+
+  async markAcceptanceChecked(enrollmentId: string, at: Date): Promise<void> {
+    await this.db
+      .update(enrollments)
+      .set({ acceptanceCheckedAt: at })
       .where(eq(enrollments.id, enrollmentId))
   }
 

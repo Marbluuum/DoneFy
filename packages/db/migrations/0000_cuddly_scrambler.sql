@@ -31,6 +31,7 @@ CREATE TABLE "enrollments" (
 	"post_id" uuid,
 	"state" text DEFAULT 'detected' NOT NULL,
 	"stage" text,
+	"acceptance_checked_at" timestamp with time zone,
 	"thread_id" text,
 	"auto_reply" integer DEFAULT 0 NOT NULL,
 	"last_intent" text,
