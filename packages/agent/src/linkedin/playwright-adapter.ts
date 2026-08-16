@@ -1,4 +1,4 @@
-import { jitteredDelayMs } from '@donefy/core'
+import { jitteredDelayMs } from '@linkfy/core'
 import type { BrowserContext, Page } from 'playwright'
 
 import {

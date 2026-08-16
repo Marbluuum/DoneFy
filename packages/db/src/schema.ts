@@ -10,7 +10,7 @@ import {
 } from 'drizzle-orm/pg-core'
 
 /**
- * One row per DoneFy user. Single-tenant today (just you), but every table
+ * One row per Linkfy user. Single-tenant today (just you), but every table
  * below carries `userId` so going multi-tenant is a matter of scoping queries
  * rather than reshaping the schema.
  */
@@ -26,7 +26,7 @@ export const users = pgTable('users', {
  *
  * Deliberately stores no cookies or credentials. The session lives only in the
  * Chrome profile on the machine running the agent — that is the whole point of
- * the local-agent design, and the main thing that separates DoneFy from the
+ * the local-agent design, and the main thing that separates Linkfy from the
  * cookies-to-the-cloud tools.
  */
 export const linkedinAccounts = pgTable('linkedin_accounts', {
@@ -93,7 +93,7 @@ export const automations = pgTable('automations', {
  * A person who interacted with one of your posts.
  *
  * Only people who commented ever land here — we never crawl or store profiles
- * that did not reach out first. That restraint is what keeps DoneFy clear of
+ * that did not reach out first. That restraint is what keeps Linkfy clear of
  * the scraping case law, so it is a hard rule, not a default.
  */
 export const contacts = pgTable('contacts', {
@@ -236,8 +236,8 @@ export const events = pgTable('events', {
   index('events_account_created_idx').on(t.accountId, t.createdAt),
 ])
 
-// The flow graph shape lives in @donefy/core; re-declared structurally here to
-// keep @donefy/db free of a dependency on it.
+// The flow graph shape lives in @linkfy/core; re-declared structurally here to
+// keep @linkfy/db free of a dependency on it.
 type FlowDefinition = {
   nodes: Array<{ id: string; type: string; config: Record<string, unknown> }>
   edges: Array<{ from: string; to: string; when?: string }>

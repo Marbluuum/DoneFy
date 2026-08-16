@@ -23,14 +23,14 @@ import {
   messages,
   posts,
   quotaUsage,
-} from '@donefy/db'
+} from '@linkfy/db'
 import {
   TERMINAL_STATES,
   type EnrollmentState,
   type HealthWindow,
   type JobType,
   type UsageSnapshot,
-} from '@donefy/core'
+} from '@linkfy/core'
 
 import type {
   ActiveAutomation,

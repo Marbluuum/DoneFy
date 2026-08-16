@@ -1,5 +1,5 @@
 {
-  "name": "@donefy/agent",
+  "name": "@linkfy/agent",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -19,8 +19,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
-    "@donefy/core": "*",
-    "@donefy/db": "*",
+    "@linkfy/core": "*",
+    "@linkfy/db": "*",
     "playwright": "^1.62.1",
     "drizzle-orm": "^0.38.2"
   },

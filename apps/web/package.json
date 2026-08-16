@@ -1,5 +1,5 @@
 {
-  "name": "@donefy/web",
+  "name": "@linkfy/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,11 +8,11 @@
     "start": "next start"
   },
   "dependencies": {
-    "@donefy/core": "*",
+    "@linkfy/core": "*",
     "next": "^15.1.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@donefy/db": "*",
+    "@linkfy/db": "*",
     "drizzle-orm": "^0.38.2"
   },
   "devDependencies": {

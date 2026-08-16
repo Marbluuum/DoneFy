@@ -1,20 +1,20 @@
 /**
  * Connects your LinkedIn account to the database.
  *
- *   npm run init -w @donefy/agent
+ *   npm run init -w @linkfy/agent
  *
  * Reads who you are from the live session rather than asking — the browser
  * already knows, and a hand-typed public identifier that does not match the
  * logged-in account produces an agent that appears to work while every dedup
  * and self-comment check silently compares against the wrong person.
  *
- * Writes DONEFY_ACCOUNT_ID into .env so nothing has to be copied by hand.
+ * Writes LINKFY_ACCOUNT_ID into .env so nothing has to be copied by hand.
  */
 
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 
-import { readSessionFromUrl } from '@donefy/core'
-import { createDb, linkedinAccounts, users } from '@donefy/db'
+import { readSessionFromUrl } from '@linkfy/core'
+import { createDb, linkedinAccounts, users } from '@linkfy/db'
 import { and, eq } from 'drizzle-orm'
 
 import { agentConfig, loadEnv, resolveBrowser } from '../config.js'
@@ -49,7 +49,7 @@ const verdict = readSessionFromUrl(finalUrl)
 
 if (verdict.state !== 'signed_in') {
   console.error(`\n❌ ${verdict.reason}`)
-  console.error('   Corré `npm run check-session -w @donefy/agent` y logueate una vez.')
+  console.error('   Corré `npm run check-session -w @linkfy/agent` y logueate una vez.')
   await context.close()
   process.exit(1)
 }
@@ -65,7 +65,7 @@ const displayName = (await page.title()).split(/[|(]/)[0]?.trim() ?? null
 await context.close()
 
 const db = createDb(config.databaseUrl)
-const email = config.ownerEmail || `${publicIdentifier}@donefy.local`
+const email = config.ownerEmail || `${publicIdentifier}@linkfy.local`
 
 const [user] = await db
   .insert(users)
@@ -97,15 +97,15 @@ const accountId =
 writeAccountId(accountId)
 
 console.log(`✅ Cuenta conectada: ${displayName ?? publicIdentifier} (${publicIdentifier})`)
-console.log(`   DONEFY_ACCOUNT_ID guardado en .env`)
+console.log(`   LINKFY_ACCOUNT_ID guardado en .env`)
 console.log('\nAhora creá una automatización y arrancá el agente:')
-console.log('   npm run agent -w @donefy/agent\n')
+console.log('   npm run agent -w @linkfy/agent\n')
 
 process.exit(0)
 
 /** Replaces the line if it exists so re-running does not stack duplicates. */
 function writeAccountId(id: string): void {
-  const line = `DONEFY_ACCOUNT_ID="${id}"`
+  const line = `LINKFY_ACCOUNT_ID="${id}"`
   let contents = ''
   try {
     contents = readFileSync('.env', 'utf8')
@@ -114,8 +114,8 @@ function writeAccountId(id: string): void {
     return
   }
 
-  if (/^DONEFY_ACCOUNT_ID=.*$/m.test(contents)) {
-    writeFileSync('.env', contents.replace(/^DONEFY_ACCOUNT_ID=.*$/m, line), 'utf8')
+  if (/^LINKFY_ACCOUNT_ID=.*$/m.test(contents)) {
+    writeFileSync('.env', contents.replace(/^LINKFY_ACCOUNT_ID=.*$/m, line), 'utf8')
   } else {
     writeFileSync('.env', `${contents.trimEnd()}\n\n# --- Cuenta ---\n${line}\n`, 'utf8')
   }

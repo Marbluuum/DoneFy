@@ -1,4 +1,4 @@
-# DoneFy
+# Linkfy
 
 Inbound LinkedIn automation. Someone comments a keyword on your post, and from
 there: a public reply, a **personalized** connection invite, a qualified DM once
@@ -269,7 +269,7 @@ npm install
 npm test                                    # 96 tests
 cp .env.example .env                        # fill in DATABASE_URL
 
-npm run check-session -w @donefy/agent
+npm run check-session -w @linkfy/agent
 ```
 
 `check-session` opens the browser and verifies LinkedIn sees a live session.

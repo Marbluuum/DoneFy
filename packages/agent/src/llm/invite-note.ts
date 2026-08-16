@@ -1,4 +1,4 @@
-import { ENBI_VOICE, INVITE_NOTE_MAX, fitsInviteNote, type VoiceProfile } from '@donefy/core'
+import { ENBI_VOICE, INVITE_NOTE_MAX, fitsInviteNote, type VoiceProfile } from '@linkfy/core'
 
 import { textOf, type Llm } from './client.js'
 

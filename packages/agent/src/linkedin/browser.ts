@@ -1,4 +1,4 @@
-import { readSessionFromUrl } from '@donefy/core'
+import { readSessionFromUrl } from '@linkfy/core'
 import { chromium, type BrowserContext, type Page } from 'playwright'
 
 import { AdapterError } from './adapter.js'

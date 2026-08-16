@@ -6,7 +6,7 @@ import { MODE } from '@/lib/fixtures'
 import { getPanelData } from '@/lib/data'
 
 export const metadata: Metadata = {
-  title: 'DoneFy',
+  title: 'Linkfy',
   description: 'Automatización inbound de LinkedIn',
 }
 
@@ -25,13 +25,28 @@ const MODE_COPY: Record<string, { label: string; hint: string }> = {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { leads, health: HEALTH } = await getPanelData()
+  const { leads, health: HEALTH, live } = await getPanelData()
   const unread = leads.filter((l) => l.unread || l.state === 'replied').length
   const mode = MODE_COPY[MODE]!
 
   return (
     <html lang="es">
       <body>
+        {/* Demo data looks exactly like real data, which is how someone ends up
+            reading a stranger's name as their own lead. Say so, in the one
+            place that is on every page. */}
+        {!live && (
+          <div
+            className="flex items-center justify-center gap-2 px-4 py-2 text-center text-xs"
+            style={{ background: 'rgb(180 83 9 / 0.18)', color: 'rgb(251 191 36)' }}
+          >
+            <span className="font-semibold">Datos de ejemplo.</span>
+            <span>
+              Todavía no hay una cuenta conectada — corré <code>npm run init</code> y agregá
+              DATABASE_URL y LINKFY_ACCOUNT_ID al entorno del panel.
+            </span>
+          </div>
+        )}
         <div className="flex min-h-screen">
           <aside
             className="flex w-60 shrink-0 flex-col justify-between border-r p-4"
@@ -45,7 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 >
                   D
                 </div>
-                <span className="text-lg font-semibold tracking-tight">DoneFy</span>
+                <span className="text-lg font-semibold tracking-tight">Linkfy</span>
               </div>
 
               <nav className="space-y-1">

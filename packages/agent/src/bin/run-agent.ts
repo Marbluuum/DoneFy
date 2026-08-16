@@ -1,7 +1,7 @@
 /**
  * The agent.
  *
- *   npm run agent -w @donefy/agent
+ *   npm run agent -w @linkfy/agent
  *
  * Runs on your machine, drives your own Chrome profile, and never sends a
  * session cookie anywhere. Everything it decides is written to the database,
@@ -13,8 +13,8 @@
 
 import { hostname } from 'node:os'
 
-import { ENBI_VOICE, type ConversationStage } from '@donefy/core'
-import { createDb } from '@donefy/db'
+import { ENBI_VOICE, type ConversationStage } from '@linkfy/core'
+import { createDb } from '@linkfy/db'
 
 import { agentConfig, loadEnv, parseWorkingHours, resolveBrowser } from '../config.js'
 import { launchBrowser } from '../linkedin/browser.js'
@@ -41,15 +41,15 @@ if (missing.length > 0) {
 }
 
 if (!config.accountId) {
-  console.error('❌ Falta DONEFY_ACCOUNT_ID en .env')
-  console.error('   Corré `npm run init -w @donefy/agent` para conectar tu cuenta.')
+  console.error('❌ Falta LINKFY_ACCOUNT_ID en .env')
+  console.error('   Corré `npm run init -w @linkfy/agent` para conectar tu cuenta.')
   process.exit(1)
 }
 
 const hours = parseWorkingHours()
 const browser = resolveBrowser()
 
-console.log('DoneFy — agente')
+console.log('Linkfy — agente')
 console.log('═══════════════')
 console.log(`Cuenta:  ${config.accountId}`)
 console.log(`Chrome:  ${browser.label}`)
@@ -121,7 +121,7 @@ await linkedin.close()
 
 if (summary.stoppedBecause === 'too_many_failures') {
   console.error(`\n❌ Se cortó después de ${summary.failures} fallas seguidas.`)
-  console.error('   Revisá la sesión con `npm run check-session -w @donefy/agent`.')
+  console.error('   Revisá la sesión con `npm run check-session -w @linkfy/agent`.')
   process.exit(1)
 }
 

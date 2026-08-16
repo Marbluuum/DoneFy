@@ -1,4 +1,4 @@
-import type { ConversationStage, EnrollmentState, LeadIntent } from '@donefy/core'
+import type { ConversationStage, EnrollmentState, LeadIntent } from '@linkfy/core'
 
 /**
  * Fake data for building the panel before the agent exists.

@@ -12,7 +12,7 @@
 
 import { and, eq } from 'drizzle-orm'
 
-import { automations, createDb, linkedinAccounts, posts } from '@donefy/db'
+import { automations, createDb, linkedinAccounts, posts } from '@linkfy/db'
 
 import { agentConfig, loadEnv } from '../config.js'
 
@@ -25,7 +25,7 @@ if (!config.databaseUrl) {
   process.exit(1)
 }
 if (!config.accountId) {
-  console.error('❌ Falta DONEFY_ACCOUNT_ID. Corré `npm run init -w @donefy/agent`.')
+  console.error('❌ Falta LINKFY_ACCOUNT_ID. Corré `npm run init -w @linkfy/agent`.')
   process.exit(1)
 }
 
@@ -39,7 +39,7 @@ const [account] = await db
   .limit(1)
 
 if (!account) {
-  console.error(`❌ No existe la cuenta ${config.accountId}. Corré \`npm run init -w @donefy/agent\`.`)
+  console.error(`❌ No existe la cuenta ${config.accountId}. Corré \`npm run init -w @linkfy/agent\`.`)
   process.exit(1)
 }
 

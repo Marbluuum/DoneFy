@@ -4,7 +4,7 @@ import type {
   HealthWindow,
   JobType,
   UsageSnapshot,
-} from '@donefy/core'
+} from '@linkfy/core'
 
 /**
  * What one tick of the runner needs from the outside world.

@@ -53,7 +53,7 @@ async function prompt(question) {
   return answer
 }
 
-console.log('\nConfiguración de DoneFy')
+console.log('\nConfiguración de Linkfy')
 console.log('═══════════════════════')
 
 await runSetup({

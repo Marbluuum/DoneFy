@@ -7,7 +7,7 @@ import {
   openingDm,
   type EnrollmentState,
   type WorkingHours,
-} from '@donefy/core'
+} from '@linkfy/core'
 
 import { AdapterError, type LinkedInAdapter } from '../linkedin/adapter.js'
 import type { Classifier, NoteWriter, PendingEnrollment, Repository } from './ports.js'

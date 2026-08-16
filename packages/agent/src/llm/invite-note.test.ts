@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { INVITE_NOTE_MAX, fitsInviteNote } from '@donefy/core'
+import { INVITE_NOTE_MAX, fitsInviteNote } from '@linkfy/core'
 
 import { fallbackNote, writeInviteNote, type InviteNoteInput } from './invite-note.js'
 import type { Llm } from './client.js'

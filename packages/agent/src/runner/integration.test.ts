@@ -7,8 +7,8 @@ import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 import { eq } from 'drizzle-orm'
 
-import { DEFAULT_WORKING_HOURS } from '@donefy/core'
-import { automations, enrollments, jobs, linkedinAccounts, messages, posts, users } from '@donefy/db'
+import { DEFAULT_WORKING_HOURS } from '@linkfy/core'
+import { automations, enrollments, jobs, linkedinAccounts, messages, posts, users } from '@linkfy/db'
 
 import type { LinkedInAdapter, PostComment } from '../linkedin/adapter.js'
 import { DrizzleRepository } from './repository.js'

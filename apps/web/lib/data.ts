@@ -6,7 +6,7 @@ import {
   TERMINAL_STATES,
   type EnrollmentState,
   type HealthState,
-} from '@donefy/core'
+} from '@linkfy/core'
 import {
   automations,
   contacts,
@@ -16,7 +16,7 @@ import {
   messages,
   posts,
   quotaUsage,
-} from '@donefy/db'
+} from '@linkfy/db'
 
 import {
   FUNNEL as FIXTURE_FUNNEL,
@@ -52,7 +52,7 @@ const DAY_MS = 86_400_000
 
 export async function getPanelData(): Promise<PanelData> {
   const url = process.env.DATABASE_URL
-  const accountId = process.env.DONEFY_ACCOUNT_ID
+  const accountId = process.env.LINKFY_ACCOUNT_ID ?? process.env.DONEFY_ACCOUNT_ID
 
   if (!url || !accountId) {
     return {

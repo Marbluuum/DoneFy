@@ -1,6 +1,6 @@
 import { accessSync, constants } from 'node:fs'
 
-import { DEFAULT_WORKING_HOURS, type WorkingHours } from '@donefy/core'
+import { DEFAULT_WORKING_HOURS, type WorkingHours } from '@linkfy/core'
 
 /**
  * Loads `.env` and works out which browser to drive.
@@ -92,8 +92,10 @@ export function agentConfig() {
     tickSeconds: positiveInt(process.env.AGENT_TICK_SECONDS, 90),
     databaseUrl: process.env.DATABASE_URL ?? '',
     anthropicKey: process.env.ANTHROPIC_API_KEY ?? '',
-    accountId: process.env.DONEFY_ACCOUNT_ID ?? '',
-    ownerEmail: process.env.DONEFY_EMAIL ?? '',
+    // DONEFY_* is the pre-rename name, still read so an .env written before it
+    // does not silently stop working.
+    accountId: process.env.LINKFY_ACCOUNT_ID ?? process.env.DONEFY_ACCOUNT_ID ?? '',
+    ownerEmail: process.env.LINKFY_EMAIL ?? process.env.DONEFY_EMAIL ?? '',
   }
 }
 

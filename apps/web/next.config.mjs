@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@donefy/core'],
+  transpilePackages: ['@linkfy/core'],
 }
 
 export default nextConfig

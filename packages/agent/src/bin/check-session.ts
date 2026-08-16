@@ -5,7 +5,7 @@
  * anything that sends, because a dead session fails every job in the queue one
  * at a time, and each failure looks like a separate problem.
  *
- *   npm run check-session -w @donefy/agent
+ *   npm run check-session -w @linkfy/agent
  *
  * On first run the profile is empty: a browser window opens, you log into
  * LinkedIn by hand, and the session persists into the profile directory from
@@ -56,7 +56,7 @@ try {
   const message = error instanceof Error ? error.message : String(error)
   if (/DISPLAY|X server/i.test(message)) {
     console.error('❌ No hay entorno gráfico para abrir el navegador.')
-    console.error('   En un servidor o contenedor: HEADLESS=1 npm run check-session -w @donefy/agent')
+    console.error('   En un servidor o contenedor: HEADLESS=1 npm run check-session -w @linkfy/agent')
     console.error('   (en headless no vas a poder loguearte a mano la primera vez)')
   } else if (/Executable doesn't exist|ENOENT/i.test(message)) {
     console.error('❌ No se encontró el navegador.')

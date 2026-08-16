@@ -20,7 +20,7 @@ const AUTONOMY_COPY: Record<string, { label: string; tone: string }> = {
 }
 
 /**
- * Mirrors `quickReplies()` in @donefy/core, keyed by the stage being *left*.
+ * Mirrors `quickReplies()` in @linkfy/core, keyed by the stage being *left*.
  * Wired to the real function once the panel talks to the database.
  */
 function quickRepliesFor(stage: string, firstName: string) {

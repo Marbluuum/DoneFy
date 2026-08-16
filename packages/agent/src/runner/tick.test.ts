@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { DEFAULT_WORKING_HOURS, type EnrollmentState } from '@donefy/core'
+import { DEFAULT_WORKING_HOURS, type EnrollmentState } from '@linkfy/core'
 
 import { AdapterError, type LinkedInAdapter, type PostComment } from '../linkedin/adapter.js'
 import type { PendingEnrollment, QueuedJob, Repository } from './ports.js'

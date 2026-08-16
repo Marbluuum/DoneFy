@@ -7,7 +7,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 import { eq } from 'drizzle-orm'
 
-import { automations, contacts, enrollments, jobs, linkedinAccounts, users } from '@donefy/db'
+import { automations, contacts, enrollments, jobs, linkedinAccounts, users } from '@linkfy/db'
 
 import { DrizzleRepository, dayKey } from './repository.js'
 

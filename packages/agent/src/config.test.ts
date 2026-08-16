@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { DEFAULT_WORKING_HOURS } from '@donefy/core'
+import { DEFAULT_WORKING_HOURS } from '@linkfy/core'
 
 import { parseWorkingHours, resolveBrowser } from './config.js'
 

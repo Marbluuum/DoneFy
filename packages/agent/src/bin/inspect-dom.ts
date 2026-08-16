@@ -9,8 +9,8 @@
  * nearby and reports the real class names around it — so the fix is read off
  * the DOM instead of guessed again.
  *
- *   npm run inspect-dom -w @donefy/agent
- *   npm run inspect-dom -w @donefy/agent -- "https://www.linkedin.com/feed/update/urn:li:share:123/"
+ *   npm run inspect-dom -w @linkfy/agent
+ *   npm run inspect-dom -w @linkfy/agent -- "https://www.linkedin.com/feed/update/urn:li:share:123/"
  *
  * Reports counts, tag names and class names. Never anyone's message content.
  */

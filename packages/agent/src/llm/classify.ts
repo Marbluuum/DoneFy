@@ -3,7 +3,7 @@ import {
   parseClassification,
   type ClassifyInput,
   type Classification,
-} from '@donefy/core'
+} from '@linkfy/core'
 
 import { textOf, type Llm } from './client.js'
 
