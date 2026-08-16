@@ -18,6 +18,10 @@
     "@anthropic-ai/sdk": "^0.115.0",
     "@donefy/core": "*",
     "@donefy/db": "*",
-    "playwright": "^1.62.1"
+    "playwright": "^1.62.1",
+    "drizzle-orm": "^0.38.2"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.12"
   }
 }

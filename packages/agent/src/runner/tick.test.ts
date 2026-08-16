@@ -34,6 +34,7 @@ type FakeState = {
   enqueued: Array<{ type: string; enrollmentId: string }>
   states: Array<{ id: string; state: EnrollmentState }>
   failures: Array<{ jobId: string; retryable: boolean }>
+  invited: string[]
   actions: string[]
   health: { accepted: number; resolved: number; failures: number; attempted: number }
   contacts: Record<string, Partial<import('./ports.js').ContactSnapshot>>
@@ -71,6 +72,7 @@ function fakeRepo(state: FakeState): Repository {
       return `enr-${state.enrolled.length}`
     },
     dueEnrollments: async () => state.due,
+    enrollmentById: async (id) => state.due.find((e) => e.id === id) ?? null,
     enqueueJob: async (input) => {
       state.enqueued.push({ type: input.type, enrollmentId: input.enrollmentId })
     },
@@ -81,6 +83,9 @@ function fakeRepo(state: FakeState): Repository {
     },
     setEnrollmentState: async (id, s) => {
       state.states.push({ id, state: s })
+    },
+    markInvited: async (id) => {
+      state.invited.push(id)
     },
     setContactDegree: async () => {},
     recordMessage: async () => {},
@@ -97,6 +102,7 @@ function fakeRepo(state: FakeState): Repository {
     },
     recordEvent: async () => {},
     conversingEnrollments: async () => [],
+    touchAccount: async () => {},
   }
 }
 
@@ -128,6 +134,7 @@ function baseState(overrides: Partial<FakeState> = {}): FakeState {
     enqueued: [],
     states: [],
     failures: [],
+    invited: [],
     actions: [],
     health: { accepted: 80, resolved: 100, failures: 0, attempted: 200 },
     contacts: {},

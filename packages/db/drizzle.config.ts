@@ -19,7 +19,11 @@ for (const candidate of ['../../.env', '.env']) {
   }
 }
 
-if (!process.env.DATABASE_URL) {
+// `generate` only reads the schema file and writes SQL, so requiring a database
+// to produce a migration would be a barrier with nothing behind it.
+const needsConnection = !process.argv.includes('generate')
+
+if (needsConnection && !process.env.DATABASE_URL) {
   throw new Error(
     'Falta DATABASE_URL.\n' +
       '   Corré `npm run setup` en la raíz del proyecto para configurarlo.',
@@ -30,5 +34,5 @@ export default {
   schema: './src/schema.ts',
   out: './migrations',
   dialect: 'postgresql',
-  dbCredentials: { url: process.env.DATABASE_URL },
+  dbCredentials: { url: process.env.DATABASE_URL ?? '' },
 } satisfies Config

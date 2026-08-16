@@ -90,6 +90,13 @@ export interface Repository {
   /** Enrollments whose next action is due. */
   dueEnrollments(accountId: string, now: Date, limit: number): Promise<PendingEnrollment[]>
 
+  /**
+   * One enrollment, whatever its schedule. A job executes long after the
+   * enrollment stopped being due, so looking it up among the due rows finds
+   * nothing exactly when the work is about to happen.
+   */
+  enrollmentById(id: string): Promise<PendingEnrollment | null>
+
   enqueueJob(input: {
     accountId: string
     enrollmentId: string
@@ -105,6 +112,10 @@ export interface Repository {
   failJob(jobId: string, error: string, retryable: boolean): Promise<void>
 
   setEnrollmentState(enrollmentId: string, state: EnrollmentState, nextActionAt: Date | null): Promise<void>
+
+  /** Stamps when an invitation actually went out, for the acceptance rate. */
+  markInvited(enrollmentId: string, at: Date): Promise<void>
+
   setContactDegree(contactId: string, degree: number): Promise<void>
   recordMessage(input: {
     contactId: string
@@ -122,6 +133,9 @@ export interface Repository {
 
   /** Live conversations, for the playbook to advance. */
   conversingEnrollments(accountId: string, limit: number): Promise<PendingEnrollment[]>
+
+  /** Liveness, so the panel can tell a quiet agent from a dead one. */
+  touchAccount(accountId: string, at: Date): Promise<void>
 }
 
 export interface Classifier {

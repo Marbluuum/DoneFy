@@ -139,6 +139,15 @@ export const enrollments = pgTable('enrollments', {
   /** When the scheduler should next look at this row. Null = waiting on an event. */
   nextActionAt: timestamp('next_action_at', { withTimezone: true }),
 
+  /**
+   * Set when an invitation actually goes out.
+   *
+   * Without it the acceptance rate cannot be measured honestly: 1st-degree
+   * contacts are messaged without ever being invited, and counting them as
+   * accepted would inflate the very number the circuit breaker trips on.
+   */
+  invitedAt: timestamp('invited_at', { withTimezone: true }),
+
   enteredStateAt: timestamp('entered_state_at', { withTimezone: true }).notNull().defaultNow(),
   lastError: text('last_error'),
   attempts: integer('attempts').notNull().default(0),

@@ -72,6 +72,9 @@ export async function runTick(deps: TickDeps): Promise<TickResult> {
 
   // --- 1. health --------------------------------------------------------
   await deps.linkedin.assertSignedIn()
+  // Recorded before any decision to skip work, so a throttled account still
+  // looks alive in the panel instead of looking crashed.
+  await deps.repo.touchAccount(deps.accountId, now)
 
   const health = assessHealth(await deps.repo.healthWindow(deps.accountId))
   result.health = health.state
@@ -179,6 +182,10 @@ export async function runTick(deps: TickDeps): Promise<TickResult> {
           },
           runAfter: decision.runAt,
         })
+        // Parked until the job runs. Without this the row stays due and the
+        // next tick — a minute later — queues the same work again, which for
+        // send_invite means inviting the same person twice.
+        await deps.repo.setEnrollmentState(enrollment.id, enrollment.state, null)
         result.scheduled++
         break
       case 'transition':
@@ -316,6 +323,7 @@ async function executeJob(
       }
 
       await deps.repo.countAction(deps.accountId, 'invite', now)
+      await deps.repo.markInvited(enrollmentId, now)
       if (enrollment && note) {
         await deps.repo.recordMessage({
           contactId: enrollment.contactId,
@@ -361,6 +369,5 @@ async function executeJob(
 }
 
 async function findEnrollment(deps: TickDeps, id: string): Promise<PendingEnrollment | undefined> {
-  const due = await deps.repo.dueEnrollments(deps.accountId, deps.now(), 200)
-  return due.find((e) => e.id === id)
+  return (await deps.repo.enrollmentById(id)) ?? undefined
 }
