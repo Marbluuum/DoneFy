@@ -427,7 +427,12 @@ export class DrizzleRepository implements Repository {
     limit: number,
     leaseHolder: string,
   ): Promise<QueuedJob[]> {
-    const leasedUntil = new Date(now.getTime() + LEASE_MINUTES * 60_000)
+    // Sent as ISO text with an explicit cast rather than as Date objects.
+    // postgres-js refuses to bind a Date in a raw fragment — it has no column
+    // type to infer from — while PGlite accepts it, so this only fails against
+    // the real database, which is the worst place to find out.
+    const leasedUntil = new Date(now.getTime() + LEASE_MINUTES * 60_000).toISOString()
+    const nowText = now.toISOString()
 
     // One statement, so two agents polling the same account cannot both come
     // away holding the same job. SKIP LOCKED lets the loser take other work
@@ -435,16 +440,16 @@ export class DrizzleRepository implements Repository {
     const result = await this.db.execute(sql`
       UPDATE ${jobs} SET
         status = 'leased',
-        leased_until = ${leasedUntil},
+        leased_until = ${leasedUntil}::timestamptz,
         leased_by = ${leaseHolder},
         attempts = ${jobs.attempts} + 1
       WHERE ${jobs.id} IN (
         SELECT ${jobs.id} FROM ${jobs}
         WHERE ${jobs.accountId} = ${accountId}
-          AND ${jobs.runAfter} <= ${now}
+          AND ${jobs.runAfter} <= ${nowText}::timestamptz
           AND (
             ${jobs.status} = 'pending'
-            OR (${jobs.status} = 'leased' AND ${jobs.leasedUntil} < ${now})
+            OR (${jobs.status} = 'leased' AND ${jobs.leasedUntil} < ${nowText}::timestamptz)
           )
         ORDER BY ${jobs.runAfter} ASC
         LIMIT ${limit}

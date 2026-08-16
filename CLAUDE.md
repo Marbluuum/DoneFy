@@ -73,6 +73,13 @@ se rompe en la vida real si eso deja de valer.
 Postgres de verdad porque todo lo interesante que hace es SQL, y un mock le da
 la razón a lo que sea que el código haga.
 
+**Pero PGlite no es postgres-js.** Los tests corren contra PGlite y la
+producción usa postgres-js, y el driver es más estricto: una fecha pasada como
+parámetro dentro de un `sql\`\`` crudo funciona en los tests y explota contra
+Supabase. En SQL crudo, mandá fechas como `.toISOString()` con `::timestamptz`.
+Es la única divergencia conocida entre los dos, y ya costó un fallo que sólo
+aparecía en la máquina de Martin.
+
 **LinkedIn manda clases hasheadas** (`.bedba3e3`) que cambian en cada deploy.
 Los comentarios, perfiles e invitaciones se extraen estructuralmente — anclados
 en `aria-label`, en la forma de un `href`, en el orden del documento. La

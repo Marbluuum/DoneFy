@@ -178,6 +178,18 @@ function parseMode(value: string | undefined): OrchestratorMode {
 }
 
 /**
+ * True when a query failed because the database is behind the code.
+ *
+ * Postgres reports these as 42703 (missing column) and 42P01 (missing table).
+ * Raw, they surface as a stack trace naming an internal column, which reads
+ * like a bug in the product rather than a migration nobody ran.
+ */
+export function isSchemaError(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code
+  return code === '42703' || code === '42P01'
+}
+
+/**
  * Writes one value into .env, replacing the line if it is already there.
  *
  * Appending instead would stack duplicates every time a command re-ran, and

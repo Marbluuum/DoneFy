@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { findEnvFile, parseWorkingHours, resolveBrowser } from './config.js'
+import { findEnvFile, isSchemaError, parseWorkingHours, resolveBrowser } from './config.js'
 
 test('a configured path that exists is used as given', () => {
   // Any executable will do — the point is that a real path is honoured.
@@ -80,4 +80,17 @@ test('the nearest .env wins over one further up', () => {
 test('no .env anywhere is not an error', () => {
   // The normal first-run state: setup has not been run yet.
   assert.equal(findEnvFile(mkdtempSync(join(tmpdir(), 'linkfy-'))), null)
+})
+
+test('a database one version behind is recognised, not reported as a crash', () => {
+  // Postgres reports these as 42703 and 42P01. Raw, they surface as a stack
+  // trace naming an internal column, which reads like a bug in the product
+  // rather than a migration nobody ran — and that is the difference between
+  // someone running one command and someone giving up.
+  assert.equal(isSchemaError({ code: '42703' }), true, 'columna que falta')
+  assert.equal(isSchemaError({ code: '42P01' }), true, 'tabla que falta')
+
+  assert.equal(isSchemaError({ code: '28P01' }), false, 'contraseña mal: otra cosa')
+  assert.equal(isSchemaError(new Error('ENOTFOUND')), false)
+  assert.equal(isSchemaError(null), false)
 })

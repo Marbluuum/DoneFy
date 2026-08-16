@@ -12,7 +12,9 @@ import { eq } from 'drizzle-orm'
 
 import { createDb, linkedinAccounts } from '@linkfy/db'
 
-import { agentConfig, loadEnv, writeEnvValue } from '../config.js'
+import { spawnSync } from 'node:child_process'
+
+import { agentConfig, isSchemaError, loadEnv, writeEnvValue } from '../config.js'
 import { clearDemo, ensureDemoAccount, runDemo, seedDemo } from '../demo/simulation.js'
 
 loadEnv()
@@ -69,13 +71,38 @@ if (provisioned) {
   console.log('Cuando corras `linkfy init`, se reemplaza por la tuya.\n')
 }
 
-await seedDemo(db, account.id)
+/**
+ * Applies pending migrations rather than failing on them.
+ *
+ * The schema changes as the product does, and a database one version behind
+ * fails as a Postgres error naming an internal column — which reads like a bug
+ * in the software rather than a command nobody ran. `npm start` already
+ * migrates unattended; there is no reason this should be stricter.
+ */
+async function withSchema<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work()
+  } catch (error) {
+    if (!isSchemaError(error)) throw error
 
-const { actions } = await runDemo({
-  db,
-  accountId: account.id,
-  timezone: config.timezone,
-  log: (message) => console.log(message),
+    console.log('\nTu base estaba desactualizada. Aplicando el esquema…\n')
+    const result = spawnSync('npm', ['run', 'db:push'], { stdio: 'inherit', cwd: process.cwd() })
+    if (result.status !== 0) {
+      console.error('\n❌ No se pudo actualizar el esquema. Corré `npm run db:push` y mirá qué dice.\n')
+      process.exit(1)
+    }
+    return work()
+  }
+}
+
+const { actions } = await withSchema(async () => {
+  await seedDemo(db, account.id)
+  return runDemo({
+    db,
+    accountId: account.id,
+    timezone: config.timezone,
+    log: (message) => console.log(message),
+  })
 })
 
 console.log('\nLo que hizo:\n')

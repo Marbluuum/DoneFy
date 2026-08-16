@@ -26,7 +26,7 @@ import {
   posts,
 } from '@linkfy/db'
 
-import { agentConfig, findEnvFile, loadEnv, resolveBrowser } from '../config.js'
+import { agentConfig, findEnvFile, isSchemaError, loadEnv, resolveBrowser } from '../config.js'
 
 loadEnv()
 
@@ -98,10 +98,19 @@ try {
 }
 
 try {
-  await db.select({ n: count() }).from(linkedinAccounts)
-  ok('Tablas creadas')
-} catch {
-  bad('Faltan tablas, o están desactualizadas', 'Corré `npm run db:push`.')
+  // Selecting a recent column rather than counting rows: a table that exists
+  // but is missing the columns this version writes fails later, mid-run, as a
+  // Postgres error naming something internal.
+  await db
+    .select({ id: linkedinAccounts.id, synced: linkedinAccounts.postsSyncedAt })
+    .from(linkedinAccounts)
+    .limit(1)
+  ok('Tablas al día')
+} catch (error) {
+  bad(
+    isSchemaError(error) ? 'La base está desactualizada' : 'No pude leer las tablas',
+    'Corré `npm run db:push`.',
+  )
   finish()
 }
 
