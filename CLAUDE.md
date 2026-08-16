@@ -11,7 +11,7 @@ Martin habla español (argentino). Respondele en español.
 El flujo corre entero: comentario → like → respuesta pública → invitación con
 nota → detecta que aceptaron → DM → conversación con botonera o automática.
 
-194 tests, todos verdes. `npm test` no necesita navegador ni cuenta: la base es
+209 tests, todos verdes. `npm test` no necesita navegador ni cuenta: la base es
 PGlite (Postgres compilado a wasm) y el DOM se prueba contra Chromium con
 páginas sintéticas.
 
@@ -23,6 +23,7 @@ automatización, y el constructor visual de flujos.
 ```bash
 npm start          # hace lo que falte y levanta agente + panel (localhost:2500)
 npm run doctor     # diagnostica la cadena entera y dice qué está roto
+npm run demo       # llena el panel corriendo el motor contra un LinkedIn simulado
 npm test           # 194 tests
 npm run init       # conecta la cuenta de LinkedIn (abre Chrome)
 npm run db:push    # aplica el esquema

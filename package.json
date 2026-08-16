@@ -22,7 +22,8 @@
     "agent": "npm run agent -w @linkfy/agent",
     "automation": "npm run automation -w @linkfy/agent --",
     "doctor": "npm run doctor -w @linkfy/agent",
-    "update": "git pull --ff-only && npm install"
+    "update": "git pull --ff-only && npm install",
+    "demo": "npm run demo -w @linkfy/agent --"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

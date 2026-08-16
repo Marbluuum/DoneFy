@@ -285,6 +285,23 @@ source ~/.zshrc
 
 Then `linkfy` starts it from anywhere, and `linkfy doctor` diagnoses it.
 
+## Seeing it work without LinkedIn
+
+```bash
+npm run demo              # fills the panel
+npm run demo -- --limpiar # removes it
+```
+
+Runs the real engine, repository, playbook and orchestrator against a
+simulated LinkedIn, writing to the real database. No browser is opened and the
+account is never touched.
+
+It exists because the other way to see this work is to publish a post, wait
+for a stranger to comment, and hope — a bad first look at software you are
+deciding whether to trust. The run covers a simulated working day, because the
+DM is deliberately held two to six hours after someone accepts and a shorter
+run ends before the conversation half of the product appears at all.
+
 ## When nothing happens
 
 ```bash
@@ -323,7 +340,7 @@ for.
 
 ```bash
 npm install
-npm test          # 194 tests, no browser or account needed
+npm test          # 209 tests, no browser or account needed
 npm run build
 ```
 
