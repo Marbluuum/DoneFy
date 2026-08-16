@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import { STAGE_LABELS, STATE_LABELS, type FixtureLead } from '@/lib/fixtures'
 import { getPanelData } from '@/lib/data'
+import { OptOutButton } from './opt-out'
 import { ReplyBar } from './reply-bar'
 
 /**
@@ -82,7 +83,7 @@ export default async function InboxPage({
     <div className="flex h-screen">
       <ConversationList leads={leads} activeId={active.id} />
       <Thread lead={active} live={live} />
-      <SidePanel lead={active} />
+      <SidePanel lead={active} live={live} />
     </div>
   )
 }
@@ -226,7 +227,7 @@ function QuickReplyBar({ lead, live }: { lead: FixtureLead; live: boolean }) {
   )
 }
 
-function SidePanel({ lead }: { lead: FixtureLead }) {
+function SidePanel({ lead, live }: { lead: FixtureLead; live: boolean }) {
   const a = lead.analysis
 
   return (
@@ -286,12 +287,7 @@ function SidePanel({ lead }: { lead: FixtureLead }) {
         </dl>
       </section>
 
-      <button
-        className="w-full rounded-lg border px-3 py-2 text-xs transition-colors hover:bg-[var(--accent-soft)]"
-        style={{ borderColor: 'var(--border)' }}
-      >
-        Pausar automatización
-      </button>
+      <OptOutButton enrollmentId={lead.id} live={live} />
     </div>
   )
 }

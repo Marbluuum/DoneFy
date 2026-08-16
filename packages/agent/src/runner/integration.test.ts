@@ -646,3 +646,78 @@ describe('publicaciones propias', () => {
     assert.equal(reads, 0, 'ya se habían leído recién')
   })
 })
+
+describe('opt-out', () => {
+  test('a contact marked opted out is dropped, mid-sequence and mid-conversation', async () => {
+    // The guarantee the whole product rests on. Opting someone out is a
+    // promise made to a real person, and it has to hold against work that was
+    // already scheduled — otherwise the message that breaks it is one that was
+    // queued before they asked.
+    const id = await enroll('no-molestar', 'No Molestar')
+    await repo.setEnrollmentState(id, 'comment_replied', null)
+    await repo.enqueueJob({
+      accountId,
+      enrollmentId: id,
+      type: 'send_dm',
+      payload: { publicIdentifier: 'no-molestar', nextState: 'dm_sent' },
+      runAfter: new Date(0),
+    })
+
+    // What the panel's button does.
+    await db
+      .update(contacts)
+      .set({ optedOutAt: clock })
+      .where(eq(contacts.publicIdentifier, 'no-molestar'))
+    await db
+      .update(enrollments)
+      .set({ state: 'opted_out', nextActionAt: null })
+      .where(eq(enrollments.id, id))
+    await db
+      .update(jobs)
+      .set({ status: 'failed', lastError: 'opt-out' })
+      .where(eq(jobs.enrollmentId, id))
+
+    const before = performed.filter((p) => p.startsWith('dm:')).length
+    advance(10)
+    await tick()
+
+    assert.equal(
+      performed.filter((p) => p.startsWith('dm:')).length,
+      before,
+      'no le mandó nada pese al job encolado',
+    )
+  })
+
+  test('and they cannot be enrolled again by commenting on another post', async () => {
+    // The case a per-conversation stop would miss: they comment again next
+    // week, a fresh enrollment starts, and the promise is broken by a path
+    // nobody was watching.
+    const result = await runTick({
+      accountId,
+      repo,
+      linkedin: {
+        ...fakeLinkedIn(),
+        readComments: async () => [
+          {
+            urn: 'urn:li:comment:otro-post',
+            authorPublicIdentifier: 'no-molestar',
+            authorName: 'No Molestar',
+            authorHeadline: 'CTO',
+            body: 'guia',
+          },
+        ],
+      },
+      classifier: { classify: async () => ({ intent: 'unclear' as const, confidence: 0, signals: {}, rationale: '' }) },
+      writer: { inviteNote: async () => 'nota' },
+      workingHours: DEFAULT_WORKING_HOURS,
+      now: () => clock,
+      leaseHolder: 'test',
+    })
+
+    assert.equal(result.enrolled, 0)
+    assert.ok(
+      result.skipped.some((s) => s.includes('no-molestar')),
+      `esperaba que lo saltara: ${result.skipped.join(' | ')}`,
+    )
+  })
+})

@@ -280,3 +280,58 @@ export async function setAutomationMode(
   revalidatePath('/automations')
   return { ok: true }
 }
+
+
+/**
+ * Never contact this person again.
+ *
+ * Distinct from handing a conversation over: that is "I will take it from
+ * here", this is "we were wrong to be here at all". It is checked before every
+ * send and before anyone is enrolled, so it also covers the next post they
+ * comment on — which is the case a per-conversation stop would miss.
+ *
+ * Deliberately not reversible from the panel. Undoing it is a decision with a
+ * person on the other side, and a button next to the one that sets it is how
+ * it gets undone by accident.
+ */
+export async function optOutContact(enrollmentId: string): Promise<ActionResult> {
+  const ctx = await scope()
+  if (!ctx) return { ok: false, error: NOT_CONFIGURED }
+
+  const enrollment = await ownedEnrollment(ctx.db, ctx.accountId, enrollmentId)
+  if (!enrollment) return { ok: false, error: 'Esa conversación no existe en tu cuenta.' }
+
+  const [contact] = await ctx.db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.accountId, ctx.accountId),
+        eq(contacts.publicIdentifier, enrollment.publicIdentifier),
+      ),
+    )
+    .limit(1)
+
+  if (!contact) return { ok: false, error: 'No encontré ese contacto.' }
+
+  // The contact first: it is the flag every future check reads, and if the
+  // rest of this fails halfway the important half has already happened.
+  await ctx.db
+    .update(contacts)
+    .set({ optedOutAt: new Date(), updatedAt: new Date() })
+    .where(eq(contacts.id, contact.id))
+
+  await ctx.db
+    .update(enrollments)
+    .set({ state: 'opted_out', nextActionAt: null, suggestions: [] })
+    .where(eq(enrollments.id, enrollmentId))
+
+  await ctx.db
+    .update(jobs)
+    .set({ status: 'failed', lastError: 'el contacto pidió no recibir mensajes' })
+    .where(and(eq(jobs.enrollmentId, enrollmentId), inArray(jobs.status, ['pending', 'leased'])))
+
+  revalidatePath('/inbox')
+  revalidatePath('/leads')
+  return { ok: true }
+}
