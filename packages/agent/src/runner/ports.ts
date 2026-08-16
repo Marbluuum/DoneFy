@@ -1,8 +1,11 @@
 import type {
   Classification,
+  ConversationStage,
+  ConversationTurn,
   EnrollmentState,
   HealthWindow,
   JobType,
+  QuickReply,
   UsageSnapshot,
 } from '@linkfy/core'
 
@@ -41,6 +44,11 @@ export type PendingEnrollment = {
   degree: number | null
   optedOut: boolean
   attempts: number
+  /** Null until they reply — the outbound sequence has no stage. */
+  stage: ConversationStage | null
+  threadId: string | null
+  /** When the agent last classified this conversation. */
+  conversationReadAt: Date | null
 }
 
 export type QueuedJob = {
@@ -133,6 +141,31 @@ export interface Repository {
 
   /** Live conversations, for the playbook to advance. */
   conversingEnrollments(accountId: string, limit: number): Promise<PendingEnrollment[]>
+
+  /** Everything said in one conversation, oldest first. */
+  history(enrollmentId: string): Promise<ConversationTurn[]>
+
+  /**
+   * The open enrollment for this person, whatever state it is in.
+   *
+   * An inbound message arrives identified by who sent it, not by which
+   * enrollment it belongs to, so this is how a reply finds its conversation.
+   */
+  openEnrollmentFor(accountId: string, publicIdentifier: string): Promise<PendingEnrollment | null>
+
+  /** Moves the conversation on after a reply actually went out. */
+  setStage(enrollmentId: string, stage: ConversationStage): Promise<void>
+
+  /** What the agent read and what it proposes, for the panel to show. */
+  saveConversationRead(input: {
+    enrollmentId: string
+    stage: ConversationStage
+    intent: string
+    confidence: number
+    suggestions: QuickReply[]
+    notes: string[]
+    threadId?: string | null
+  }): Promise<void>
 
   /** Liveness, so the panel can tell a quiet agent from a dead one. */
   touchAccount(accountId: string, at: Date): Promise<void>

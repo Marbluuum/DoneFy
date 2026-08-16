@@ -131,6 +131,39 @@ export const enrollments = pgTable('enrollments', {
 
   state: text('state').notNull().default('detected'),
 
+  /**
+   * Where the conversation is, once there is one. Null until they reply.
+   *
+   * Separate from `state` on purpose: `state` tracks the outbound sequence and
+   * stops at "they answered", while this tracks the qualifying that happens
+   * afterwards. Collapsing them would mean a lead who replies twice looks like
+   * a lead who moved backwards.
+   */
+  stage: text('stage'),
+
+  /** LinkedIn's thread id, so replies are read from the right conversation. */
+  threadId: text('thread_id'),
+
+  /** The agent's last read of the lead, for the panel's right-hand column. */
+  lastIntent: text('last_intent'),
+  /** 0-100. Stored as an integer to keep the column free of float surprises. */
+  lastConfidence: integer('last_confidence'),
+
+  /** What the panel offers as one-click replies. Empty when there is nothing to propose. */
+  suggestions: jsonb('suggestions').$type<SuggestedReply[]>().notNull().default([]),
+
+  /** Why the agent decided what it decided, in the owner's language. */
+  agentNotes: jsonb('agent_notes').$type<string[]>().notNull().default([]),
+
+  /**
+   * When the agent last read this conversation.
+   *
+   * Without it every waiting conversation is re-classified on every cycle —
+   * one model call per lead per 90 seconds, forever, to reach the same
+   * conclusion about the same unanswered message.
+   */
+  conversationReadAt: timestamp('conversation_read_at', { withTimezone: true }),
+
   /** The comment that triggered this. Kept for personalizing the invite note. */
   commentUrn: text('comment_urn'),
   commentText: text('comment_text'),
@@ -235,6 +268,13 @@ export const events = pgTable('events', {
 }, (t) => [
   index('events_account_created_idx').on(t.accountId, t.createdAt),
 ])
+
+/** Mirrors QuickReply in @linkfy/core; see the note below on why it is copied. */
+type SuggestedReply = {
+  label: string
+  body: string
+  advances: boolean
+}
 
 // The flow graph shape lives in @linkfy/core; re-declared structurally here to
 // keep @linkfy/db free of a dependency on it.

@@ -40,6 +40,12 @@ export type FixtureLead = {
   }
   unread: boolean
   lastActivity: string
+  /**
+   * What the agent actually proposed, when it has run. The local mirror below
+   * only covers the fixtures; anything real comes from the agent, so a change
+   * to the playbook shows up here without the panel being edited too.
+   */
+  quickReplies?: Array<{ label: string; body: string; advances: boolean }>
 }
 
 export const LEADS: FixtureLead[] = [

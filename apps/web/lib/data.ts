@@ -4,8 +4,10 @@ import {
   assessHealth,
   DEFAULT_QUOTA,
   TERMINAL_STATES,
+  type ConversationStage,
   type EnrollmentState,
   type HealthState,
+  type LeadIntent,
 } from '@linkfy/core'
 import {
   automations,
@@ -92,6 +94,11 @@ export async function getPanelData(): Promise<PanelData> {
       degree: contacts.degree,
       publicIdentifier: contacts.publicIdentifier,
       state: enrollments.state,
+      stage: enrollments.stage,
+      lastIntent: enrollments.lastIntent,
+      lastConfidence: enrollments.lastConfidence,
+      suggestions: enrollments.suggestions,
+      agentNotes: enrollments.agentNotes,
       keyword: enrollments.matchedKeyword,
       comment: enrollments.commentText,
       postUrl: posts.url,
@@ -144,9 +151,7 @@ export async function getPanelData(): Promise<PanelData> {
     degree: (row.degree ?? 3) as 1 | 2 | 3,
     avatarInitials: initialsOf(row.name ?? row.publicIdentifier),
     state: row.state as EnrollmentState,
-    // The conversation stage is not stored yet — the playbook runs in memory —
-    // so this stays null rather than being invented from the state.
-    stage: null,
+    stage: (row.stage as ConversationStage | null) ?? null,
     keyword: row.keyword ?? '',
     postExcerpt: row.postExcerpt ?? row.postUrl ?? '',
     comment: row.comment ?? '',
@@ -155,6 +160,24 @@ export async function getPanelData(): Promise<PanelData> {
     // definition that matches what the badge is used for.
     unread: (byEnrollment.get(row.id) ?? []).at(-1)?.from === 'lead',
     lastActivity: relativeTime(row.enteredStateAt),
+    // Only present once the agent has actually read a reply. Absent is what
+    // the panel renders as "todavía no respondió", which is the truth before
+    // there is anything to read.
+    analysis: row.lastIntent
+      ? {
+          intent: row.lastIntent as LeadIntent,
+          confidence: (row.lastConfidence ?? 0) / 100,
+          rationale: (row.agentNotes ?? [])[0] ?? '',
+          autonomy: (row.suggestions ?? []).length > 0 ? ('suggest' as const) : ('handoff' as const),
+          notes: row.agentNotes ?? [],
+          signals: {},
+        }
+      : undefined,
+    quickReplies: (row.suggestions ?? []).map((s) => ({
+      label: s.label,
+      body: s.body,
+      advances: s.advances,
+    })),
   }))
 
   const watched = await db

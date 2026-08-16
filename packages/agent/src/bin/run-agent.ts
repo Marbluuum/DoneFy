@@ -55,6 +55,9 @@ console.log(`Cuenta:  ${config.accountId}`)
 console.log(`Chrome:  ${browser.label}`)
 console.log(`Horario: ${hours.startHour}:00–${hours.endHour}:00, días ${hours.activeDays.join(',')} (${hours.timezone})`)
 console.log(`Ciclo:   cada ${config.tickSeconds}s`)
+console.log(
+  `Modo:    ${config.mode}${config.mode === 'copilot' ? ' (propone todo, no manda nada solo)' : ''}`,
+)
 console.log('\nCtrl-C para parar.\n')
 
 const db = createDb(config.databaseUrl)
@@ -109,6 +112,7 @@ const summary = await runLoop({
       },
       writer: { inviteNote: (input) => writeInviteNote(llm, input) },
       workingHours: hours,
+      mode: config.mode,
       now: () => new Date(),
       // Identifies this machine when claiming jobs, so a second agent on
       // another machine takes different work rather than the same work.

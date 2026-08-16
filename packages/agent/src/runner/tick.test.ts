@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { DEFAULT_WORKING_HOURS, type EnrollmentState } from '@linkfy/core'
+import {
+  DEFAULT_WORKING_HOURS,
+  type ConversationTurn,
+  type EnrollmentState,
+} from '@linkfy/core'
 
 import { AdapterError, type LinkedInAdapter, type PostComment } from '../linkedin/adapter.js'
 import type { PendingEnrollment, QueuedJob, Repository } from './ports.js'
@@ -39,6 +43,10 @@ type FakeState = {
   health: { accepted: number; resolved: number; failures: number; attempted: number }
   contacts: Record<string, Partial<import('./ports.js').ContactSnapshot>>
   due: PendingEnrollment[]
+  conversing: PendingEnrollment[]
+  threads: Record<string, ConversationTurn[]>
+  stages: Array<{ id: string; stage: string }>
+  reads: Array<{ enrollmentId: string; suggestions: unknown[]; intent: string }>
 }
 
 function fakeRepo(state: FakeState): Repository {
@@ -101,7 +109,16 @@ function fakeRepo(state: FakeState): Repository {
       state.actions.push(action)
     },
     recordEvent: async () => {},
-    conversingEnrollments: async () => [],
+    conversingEnrollments: async () => state.conversing,
+    history: async (id) => state.threads[id] ?? [],
+    openEnrollmentFor: async (_a, identifier) =>
+      [...state.due, ...state.conversing].find((e) => e.publicIdentifier === identifier) ?? null,
+    setStage: async (id, stage) => {
+      state.stages.push({ id, stage })
+    },
+    saveConversationRead: async (input) => {
+      state.reads.push(input)
+    },
     touchAccount: async () => {},
   }
 }
@@ -135,6 +152,10 @@ function baseState(overrides: Partial<FakeState> = {}): FakeState {
     states: [],
     failures: [],
     invited: [],
+    conversing: [],
+    threads: {},
+    stages: [],
+    reads: [],
     actions: [],
     health: { accepted: 80, resolved: 100, failures: 0, attempted: 200 },
     contacts: {},
@@ -321,6 +342,9 @@ test('a due enrollment gets its next job queued', async () => {
         matchedKeyword: 'software',
         postUrl: 'https://www.linkedin.com/posts/x',
         degree: null,
+        stage: null,
+        threadId: null,
+        conversationReadAt: null,
         optedOut: false,
         attempts: 0,
       },

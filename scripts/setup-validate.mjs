@@ -59,6 +59,9 @@ CHROME_EXECUTABLE_PATH="${existing.CHROME_EXECUTABLE_PATH || ''}"
 # --- LLM ---
 ANTHROPIC_API_KEY="${anthropicKey}"
 
+# --- Autonomía: copilot | assisted | autopilot ---
+LINKFY_MODE="${existing.LINKFY_MODE || 'copilot'}"
+
 # --- Horario de trabajo (fuera de esto el agente no hace nada) ---
 AGENT_TICK_SECONDS=${existing.AGENT_TICK_SECONDS || 90}
 AGENT_TIMEZONE="${existing.AGENT_TIMEZONE || 'America/Argentina/Buenos_Aires'}"

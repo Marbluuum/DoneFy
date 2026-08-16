@@ -1,14 +1,23 @@
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { after, before, test } from 'node:test'
+import { after, before, describe, test } from 'node:test'
 
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 import { eq } from 'drizzle-orm'
 
 import { DEFAULT_WORKING_HOURS } from '@linkfy/core'
-import { automations, enrollments, jobs, linkedinAccounts, messages, posts, users } from '@linkfy/db'
+import {
+  automations,
+  contacts,
+  enrollments,
+  jobs,
+  linkedinAccounts,
+  messages,
+  posts,
+  users,
+} from '@linkfy/db'
 
 import type { LinkedInAdapter, PostComment } from '../linkedin/adapter.js'
 import { DrizzleRepository } from './repository.js'
@@ -42,6 +51,15 @@ const COMMENT: PostComment = {
 
 const POST_URL = 'https://www.linkedin.com/feed/update/urn:li:activity:7000'
 
+/** What LinkedIn's inbox is showing this cycle. Set per test. */
+let inbox: Array<{
+  threadId: string
+  who: string
+  name: string
+  fromOwner: boolean
+  messages: Array<{ from: 'owner' | 'lead'; body: string }>
+}> = []
+
 function fakeLinkedIn(): LinkedInAdapter {
   return {
     assertSignedIn: async () => {},
@@ -61,8 +79,21 @@ function fakeLinkedIn(): LinkedInAdapter {
     sendMessage: async (_id, body) => {
       performed.push(`dm:${body}`)
     },
-    listConversations: async () => [],
-    readThread: async () => [],
+    listConversations: async () =>
+      inbox.map((c) => ({
+        threadId: c.threadId,
+        participantPublicIdentifier: c.who,
+        participantName: c.name,
+        lastMessageAt: clock,
+        lastMessageFromOwner: c.fromOwner,
+        snippet: c.messages.at(-1)?.body ?? '',
+      })),
+    readThread: async (threadId) =>
+      (inbox.find((c) => c.threadId === threadId)?.messages ?? []).map((m) => ({
+        from: m.from,
+        body: m.body,
+        at: clock,
+      })),
     close: async () => {},
   }
 }
@@ -75,7 +106,14 @@ function tick() {
     accountId,
     repo,
     linkedin: fakeLinkedIn(),
-    classifier: { classify: async () => ({ intent: 'unclear', confidence: 0, signals: {} }) as never },
+    classifier: {
+      classify: async () => ({
+        intent: 'confirms' as const,
+        confidence: 0.9,
+        signals: { company: 'empresa de desarrollo' },
+        rationale: 'Confirma que tiene empresa de tecnología.',
+      }),
+    },
     writer: {
       inviteNote: async (input) => `Buenas ${input.firstName}! Vi que comentaste "${input.matchedKeyword}".`,
     },
@@ -222,3 +260,108 @@ test('the account is marked alive on every cycle', async () => {
 
   assert.ok(before!.seen, 'ya quedó registrado en los ciclos anteriores')
 })
+
+describe('conversaciones', () => {
+  const REPLY = 'Hola Martin, si tenemos una empresa de desarrollo'
+
+  test('a reply is recorded and stops the outbound sequence', async () => {
+    // The single most important guard in the product. Someone who wrote back is
+    // not someone to keep chasing, and a follow-up sent after a reply is the
+    // thing that makes automation obvious.
+    inbox = [
+      {
+        threadId: 't1',
+        who: 'wendy-torres',
+        name: 'Wendy Torres',
+        fromOwner: false,
+        messages: [
+          { from: 'owner', body: 'Buenas Wendy! Vi que me comentaste la publicación.' },
+          { from: 'lead', body: REPLY },
+        ],
+      },
+    ]
+
+    const result = await tick()
+    assert.equal(result.inbound, 1)
+    // Read and answered in the same cycle: listening happens before
+    // scheduling, so the reply is handled before anything chases her.
+    assert.equal(result.proposed, 1)
+
+    const [enrollment] = await db
+      .select({ state: enrollments.state })
+      .from(enrollments)
+      .where(eq(enrollments.contactId, await contactIdOf('wendy-torres')))
+    assert.equal(enrollment!.state, 'replied')
+  })
+
+  test('the same message read again is not stored twice', async () => {
+    // LinkedIn renders times as "hace 2 h", so the same message read on two
+    // cycles carries two different instants. Deduping on the timestamp would
+    // duplicate every message in every thread, every cycle.
+    const before = await countMessages('wendy-torres')
+    const result = await tick()
+    const after = await countMessages('wendy-torres')
+
+    assert.equal(result.inbound, 0)
+    assert.equal(before, after)
+    // And nothing is re-classified either: same message, same conclusion, and
+    // a model call per lead per cycle to get there.
+    assert.equal(result.proposed, 0)
+  })
+
+  test('in copilot mode it proposes a reply and sends nothing', async () => {
+    // The default, and deliberately so: sending unattended means answering a
+    // real person in your name, where being wrong costs the lead, not a slot.
+    assert.equal(performed.filter((p) => p.startsWith('dm:')).length, 0, 'no mandó nada')
+
+    const [row] = await db
+      .select({
+        suggestions: enrollments.suggestions,
+        intent: enrollments.lastIntent,
+        stage: enrollments.stage,
+        notes: enrollments.agentNotes,
+      })
+      .from(enrollments)
+      .where(eq(enrollments.contactId, await contactIdOf('wendy-torres')))
+
+    assert.ok((row!.suggestions ?? []).length > 0, 'quedaron respuestas para un click')
+    assert.ok(row!.suggestions![0]!.body.includes('Wendy'), 'la propuesta la nombra')
+    assert.equal(row!.intent, 'confirms')
+    assert.equal(row!.stage, 'qualifying_company')
+    assert.ok((row!.notes ?? []).length > 0, 'y explica por qué')
+  })
+
+  test('a message from someone who never commented is ignored', async () => {
+    // Only people who reached out first are ever talked to. An inbox is full of
+    // other conversations and none of them belong to this product.
+    inbox = [
+      {
+        threadId: 't9',
+        who: 'un-desconocido',
+        name: 'Alguien Más',
+        fromOwner: false,
+        messages: [{ from: 'lead', body: 'hola, vi tu perfil' }],
+      },
+    ]
+
+    const result = await tick()
+    assert.equal(result.inbound, 0)
+    assert.equal(result.proposed, 0)
+  })
+})
+
+async function contactIdOf(identifier: string): Promise<string> {
+  const [row] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(eq(contacts.publicIdentifier, identifier))
+  return row!.id
+}
+
+async function countMessages(identifier: string): Promise<number> {
+  const rows = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(eq(messages.contactId, await contactIdOf(identifier)))
+  return rows.length
+}

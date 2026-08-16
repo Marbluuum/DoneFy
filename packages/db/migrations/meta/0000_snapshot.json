@@ -1,5 +1,5 @@
 {
-  "id": "28d3b25f-a7af-4508-ab29-62e7ec7b99d2",
+  "id": "d1de4129-9a7f-4ff1-b8d7-6139ec9eb6eb",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -245,6 +245,50 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'detected'"
+        },
+        "stage": {
+          "name": "stage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_intent": {
+          "name": "last_intent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_confidence": {
+          "name": "last_confidence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suggestions": {
+          "name": "suggestions",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "agent_notes": {
+          "name": "agent_notes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "conversation_read_at": {
+          "name": "conversation_read_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "comment_urn": {
           "name": "comment_urn",

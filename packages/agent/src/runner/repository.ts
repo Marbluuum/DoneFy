@@ -26,9 +26,12 @@ import {
 } from '@linkfy/db'
 import {
   TERMINAL_STATES,
+  type ConversationStage,
+  type ConversationTurn,
   type EnrollmentState,
   type HealthWindow,
   type JobType,
+  type QuickReply,
   type UsageSnapshot,
 } from '@linkfy/core'
 
@@ -352,6 +355,9 @@ export class DrizzleRepository implements Repository {
         degree: contacts.degree,
         optedOutAt: contacts.optedOutAt,
         attempts: enrollments.attempts,
+        stage: enrollments.stage,
+        threadId: enrollments.threadId,
+        conversationReadAt: enrollments.conversationReadAt,
       })
       .from(enrollments)
       .innerJoin(contacts, eq(enrollments.contactId, contacts.id))
@@ -378,6 +384,9 @@ export class DrizzleRepository implements Repository {
       degree: row.degree,
       optedOut: row.optedOutAt !== null,
       attempts: row.attempts,
+      stage: (row.stage as ConversationStage | null) ?? null,
+      threadId: row.threadId,
+      conversationReadAt: row.conversationReadAt,
     }))
   }
 
@@ -546,6 +555,9 @@ export class DrizzleRepository implements Repository {
       direction: input.direction,
       body: input.body,
       generated: input.generated ? 1 : 0,
+      // Stamped from the shared clock rather than the database's, so "has this
+      // been read since it arrived" compares two times that mean the same thing.
+      sentAt: this.now(),
     })
   }
 
@@ -646,6 +658,68 @@ export class DrizzleRepository implements Repository {
     data: Record<string, unknown>,
   ): Promise<void> {
     await this.db.insert(events).values({ accountId, type, data })
+  }
+
+  async history(enrollmentId: string): Promise<ConversationTurn[]> {
+    const rows = await this.db
+      .select({ direction: messages.direction, body: messages.body, at: messages.sentAt })
+      .from(messages)
+      .where(eq(messages.enrollmentId, enrollmentId))
+      .orderBy(asc(messages.sentAt))
+
+    return rows.map((row) => ({
+      from: row.direction === 'outbound' ? 'owner' : 'lead',
+      body: row.body,
+      at: row.at,
+    }))
+  }
+
+  async openEnrollmentFor(
+    accountId: string,
+    publicIdentifier: string,
+  ): Promise<PendingEnrollment | null> {
+    const [row] = await this.selectEnrollments(
+      and(
+        eq(automations.accountId, accountId),
+        eq(contacts.publicIdentifier, publicIdentifier),
+        notInArray(enrollments.state, TERMINAL),
+      ),
+      1,
+    )
+    return row ?? null
+  }
+
+  async setStage(enrollmentId: string, stage: ConversationStage): Promise<void> {
+    // The suggestions belonged to the stage just left, so they are cleared
+    // rather than left on screen offering a question that was already asked.
+    await this.db
+      .update(enrollments)
+      .set({ stage, suggestions: [] })
+      .where(eq(enrollments.id, enrollmentId))
+  }
+
+  async saveConversationRead(input: {
+    enrollmentId: string
+    stage: ConversationStage
+    intent: string
+    confidence: number
+    suggestions: QuickReply[]
+    notes: string[]
+    threadId?: string | null
+  }): Promise<void> {
+    await this.db
+      .update(enrollments)
+      .set({
+        stage: input.stage,
+        lastIntent: input.intent,
+        // Stored 0-100 so the column stays an integer; the panel divides again.
+        lastConfidence: Math.round(input.confidence * 100),
+        suggestions: input.suggestions,
+        agentNotes: input.notes,
+        conversationReadAt: this.now(),
+        ...(input.threadId ? { threadId: input.threadId } : {}),
+      })
+      .where(eq(enrollments.id, input.enrollmentId))
   }
 
   async touchAccount(accountId: string, at: Date): Promise<void> {

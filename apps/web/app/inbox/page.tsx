@@ -203,7 +203,14 @@ function Thread({ lead }: { lead: FixtureLead }) {
 
 function QuickReplyBar({ lead }: { lead: FixtureLead }) {
   const firstName = lead.name.split(' ')[0]!
-  const replies = lead.stage ? quickRepliesFor(lead.stage, firstName) : []
+  // The agent's own proposals win: they were produced by the playbook against
+  // this exact conversation, while the local list is a mirror for the fixtures.
+  const replies =
+    lead.quickReplies && lead.quickReplies.length > 0
+      ? lead.quickReplies
+      : lead.stage
+        ? quickRepliesFor(lead.stage, firstName)
+        : []
   const blocked = lead.analysis?.autonomy === 'handoff'
 
   return (

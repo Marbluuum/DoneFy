@@ -2,10 +2,15 @@ import {
   assessHealth,
   checkEligibility,
   decide,
+  DEFAULT_POLICY,
   isTerminal,
   matchesKeyword,
   openingDm,
+  orchestrate,
+  type ConversationStage,
+  type ConversationTurn,
   type EnrollmentState,
+  type OrchestratorMode,
   type WorkingHours,
 } from '@linkfy/core'
 
@@ -19,13 +24,18 @@ import type { Classifier, NoteWriter, PendingEnrollment, Repository } from './po
  *
  *   1. health   — refuse to act at all if the account is in trouble
  *   2. scan     — find new keyword comments and enroll who qualifies
- *   3. schedule — ask the engine what each enrollment needs next
- *   4. execute  — do the queued work
+ *   3. listen   — read what leads wrote back
+ *   4. converse — let the playbook answer, or propose an answer
+ *   5. schedule — ask the engine what each enrollment needs next
+ *   6. execute  — do the queued work
  *
  * Health first because every later phase can send something, and a restricted
  * account should discover that before it acts, not after. Scanning before
  * scheduling so a comment posted a minute ago is handled in the same cycle
- * rather than waiting a full tick.
+ * rather than waiting a full tick. Listening before scheduling because a reply
+ * that arrived overnight has to cancel the follow-up that would otherwise be
+ * queued this afternoon — getting that order wrong means answering someone by
+ * chasing them.
  *
  * Nothing here is a loop: a tick does a bounded amount of work and returns. The
  * loop lives in the runner, which makes this testable and means a crash costs
@@ -39,6 +49,8 @@ export type TickDeps = {
   classifier: Classifier
   writer: NoteWriter
   workingHours: WorkingHours
+  /** How much the agent may do on its own. Defaults to proposing everything. */
+  mode?: OrchestratorMode
   now: () => Date
   /** Identifies this agent when claiming jobs. */
   leaseHolder: string
@@ -46,6 +58,7 @@ export type TickDeps = {
   maxCommentsPerPost?: number
   maxJobsPerTick?: number
   maxEnrollmentsPerTick?: number
+  maxConversationsPerTick?: number
   log?: (message: string, data?: Record<string, unknown>) => void
 }
 
@@ -55,6 +68,10 @@ export type TickResult = {
   scheduled: number
   executed: number
   failed: number
+  /** Lead messages read for the first time. */
+  inbound: number
+  /** Replies the agent proposed rather than sent. */
+  proposed: number
   skipped: string[]
 }
 
@@ -67,6 +84,8 @@ export async function runTick(deps: TickDeps): Promise<TickResult> {
     scheduled: 0,
     executed: 0,
     failed: 0,
+    inbound: 0,
+    proposed: 0,
     skipped: [],
   }
 
@@ -150,7 +169,15 @@ export async function runTick(deps: TickDeps): Promise<TickResult> {
     }
   }
 
-  // --- 3. schedule ------------------------------------------------------
+  // --- 3. listen --------------------------------------------------------
+  // Reading before scheduling, because a reply that arrived overnight has to
+  // stop the follow-up that would otherwise be queued for this afternoon.
+  result.inbound += await readInbound(deps, log)
+
+  // --- 4. converse ------------------------------------------------------
+  result.proposed += await advanceConversations(deps, automations, now, log)
+
+  // --- 5. schedule ------------------------------------------------------
   const due = await deps.repo.dueEnrollments(deps.accountId, now, 100)
   const usage = await deps.repo.usage(deps.accountId, now)
 
@@ -200,7 +227,7 @@ export async function runTick(deps: TickDeps): Promise<TickResult> {
     }
   }
 
-  // --- 4. execute -------------------------------------------------------
+  // --- 6. execute -------------------------------------------------------
   const jobs = await deps.repo.claimJobs(
     deps.accountId,
     now,
@@ -249,6 +276,8 @@ async function executeJob(
     publicIdentifier: string
     postUrl?: string
     commentUrn?: string
+    body?: string
+    nextStage?: ConversationStage
     nextState: EnrollmentState
   }
   const enrollmentId = job.enrollmentId!
@@ -358,6 +387,35 @@ async function executeJob(
       return
     }
 
+    case 'send_reply': {
+      const body = String(payload.body ?? '')
+      if (!body) throw new AdapterError('selector', 'send_reply sin texto')
+
+      const enrollment = await findEnrollment(deps, enrollmentId)
+      await deps.linkedin.sendMessage(payload.publicIdentifier, body)
+      await deps.repo.countAction(deps.accountId, 'dm', now)
+
+      if (enrollment) {
+        await deps.repo.recordMessage({
+          contactId: enrollment.contactId,
+          enrollmentId,
+          channel: 'dm',
+          direction: 'outbound',
+          body,
+          generated: true,
+        })
+      }
+
+      const stage = payload.nextStage as ConversationStage
+      await deps.repo.setStage(enrollmentId, stage)
+
+      // A conversation that ended also ends the enrollment; leaving it in
+      // `replied` would keep offering replies to someone who already booked.
+      const finalState = STAGE_TO_STATE[stage]
+      if (finalState) await advance(finalState)
+      return
+    }
+
     case 'withdraw_invite':
       await deps.linkedin.withdrawInvite(payload.publicIdentifier)
       await advance(payload.nextState)
@@ -366,6 +424,193 @@ async function executeJob(
     default:
       throw new AdapterError('selector', `Tipo de job no implementado: ${job.type}`)
   }
+}
+
+
+/**
+ * Reads inbound messages and attaches them to the conversation they belong to.
+ *
+ * A message arrives identified by who sent it, never by which enrollment it
+ * belongs to, so the matching happens here. Anything from someone who is not
+ * in a flow is ignored rather than enrolled: this product only ever talks to
+ * people who reached out first.
+ */
+async function readInbound(
+  deps: TickDeps,
+  log: (message: string, data?: Record<string, unknown>) => void,
+): Promise<number> {
+  const conversations = await deps.linkedin
+    .listConversations({ limit: deps.maxConversationsPerTick ?? 25 })
+    .catch((error: unknown) => {
+      log('no se pudieron leer las conversaciones', { error: String(error) })
+      return []
+    })
+
+  let recorded = 0
+
+  for (const conversation of conversations) {
+    if (conversation.lastMessageFromOwner) continue
+
+    const enrollment = await deps.repo.openEnrollmentFor(
+      deps.accountId,
+      conversation.participantPublicIdentifier,
+    )
+    if (!enrollment) continue
+
+    const thread = await deps.linkedin.readThread(conversation.threadId).catch(() => [])
+    const known = await deps.repo.history(enrollment.id)
+
+    // Matched on sender and text rather than on a timestamp: LinkedIn renders
+    // times as "hace 2 h", so the same message read twice carries two
+    // different instants and would be stored twice.
+    const fresh = thread.filter(
+      (message) => !known.some((seen) => seen.from === message.from && seen.body === message.body),
+    )
+
+    for (const message of fresh) {
+      await deps.repo.recordMessage({
+        contactId: enrollment.contactId,
+        enrollmentId: enrollment.id,
+        channel: 'dm',
+        direction: message.from === 'lead' ? 'inbound' : 'outbound',
+        body: message.body,
+        generated: false,
+      })
+      if (message.from === 'lead') recorded++
+    }
+
+    if (fresh.some((m) => m.from === 'lead') && enrollment.state !== 'replied') {
+      // A reply ends the outbound sequence, whatever it was about to do next.
+      await deps.repo.setEnrollmentState(enrollment.id, 'replied', deps.now())
+      await deps.repo.recordEvent(deps.accountId, 'lead_replied', {
+        enrollment: enrollment.id,
+        from: enrollment.publicIdentifier,
+      })
+    }
+  }
+
+  return recorded
+}
+
+/** The stage a conversation starts in, before anything has been read. */
+const FIRST_STAGE: ConversationStage = 'qualifying_company'
+
+/** Conversation outcomes that also end the enrollment. */
+const STAGE_TO_STATE: Partial<Record<ConversationStage, EnrollmentState>> = {
+  booked: 'booked',
+  disqualified: 'disqualified',
+  handed_off: 'handed_off',
+  abandoned: 'closed',
+}
+
+/**
+ * Runs the playbook over every live conversation.
+ *
+ * What comes out is a decision, not a message: in copilot mode — the default —
+ * everything is proposed and the owner clicks. That is deliberate. The moment
+ * this sends unattended it is answering a real person in your name, and the
+ * cost of being wrong is not a wasted invite, it is a burnt lead.
+ */
+async function advanceConversations(
+  deps: TickDeps,
+  automations: Awaited<ReturnType<Repository['activeAutomations']>>,
+  now: Date,
+  log: (message: string, data?: Record<string, unknown>) => void,
+): Promise<number> {
+  const calendars = new Map(automations.map((a) => [a.id, a.calendarUrl]))
+  const conversing = await deps.repo.conversingEnrollments(
+    deps.accountId,
+    deps.maxConversationsPerTick ?? 25,
+  )
+
+  let proposed = 0
+
+  for (const enrollment of conversing) {
+    const history: ConversationTurn[] = await deps.repo.history(enrollment.id)
+    const latest = history.at(-1)
+
+    // Nothing to answer: either silence, or we already spoke last. The
+    // orchestrator would refuse anyway, but classifying our own message would
+    // spend a call to be told so.
+    if (!latest || latest.from !== 'lead') continue
+
+    // Already read, and nothing new since. Re-classifying would spend a model
+    // call per lead per cycle to reach the same conclusion about the same
+    // message — and overwrite suggestions the owner may be looking at.
+    if (enrollment.conversationReadAt && latest.at <= enrollment.conversationReadAt) continue
+
+    const stage = enrollment.stage ?? FIRST_STAGE
+
+    let classification
+    try {
+      classification = await deps.classifier.classify({
+        stage,
+        history: history.slice(0, -1),
+        latest: latest.body,
+      })
+    } catch (error) {
+      log('no se pudo clasificar la respuesta', {
+        lead: enrollment.publicIdentifier,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      continue
+    }
+
+    const decision = orchestrate(
+      {
+        stage,
+        history,
+        optedOut: enrollment.optedOut,
+        firstName: enrollment.firstName,
+        calendarUrl: calendars.get(enrollment.automationId) ?? '',
+      },
+      classification,
+      { ...DEFAULT_POLICY, mode: deps.mode ?? 'copilot', workingHours: deps.workingHours },
+      now,
+    )
+
+    await deps.repo.saveConversationRead({
+      enrollmentId: enrollment.id,
+      stage,
+      intent: classification.intent,
+      confidence: classification.confidence,
+      suggestions: decision.action.kind === 'suggest' ? decision.action.options : [],
+      notes: decision.notes,
+    })
+
+    switch (decision.action.kind) {
+      case 'send':
+        await deps.repo.enqueueJob({
+          accountId: deps.accountId,
+          enrollmentId: enrollment.id,
+          type: 'send_reply',
+          payload: {
+            publicIdentifier: enrollment.publicIdentifier,
+            body: decision.action.body,
+            nextStage: decision.nextStage,
+          },
+          runAfter: decision.action.sendAt,
+        })
+        break
+
+      case 'suggest':
+        proposed++
+        break
+
+      case 'handoff':
+        await deps.repo.setEnrollmentState(enrollment.id, 'handed_off', null)
+        await deps.repo.recordEvent(deps.accountId, 'handed_off', {
+          enrollment: enrollment.id,
+          reason: decision.action.reason,
+        })
+        break
+
+      case 'none':
+        break
+    }
+  }
+
+  return proposed
 }
 
 async function findEnrollment(deps: TickDeps, id: string): Promise<PendingEnrollment | undefined> {

@@ -10,6 +10,8 @@ const OK: TickResult = {
   scheduled: 0,
   executed: 0,
   failed: 0,
+  inbound: 0,
+  proposed: 0,
   skipped: [],
 }
 

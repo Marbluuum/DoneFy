@@ -1,6 +1,10 @@
 import { accessSync, constants } from 'node:fs'
 
-import { DEFAULT_WORKING_HOURS, type WorkingHours } from '@linkfy/core'
+import {
+  DEFAULT_WORKING_HOURS,
+  type OrchestratorMode,
+  type WorkingHours,
+} from '@linkfy/core'
 
 /**
  * Loads `.env` and works out which browser to drive.
@@ -96,6 +100,7 @@ export function agentConfig() {
     // does not silently stop working.
     accountId: process.env.LINKFY_ACCOUNT_ID ?? process.env.DONEFY_ACCOUNT_ID ?? '',
     ownerEmail: process.env.LINKFY_EMAIL ?? process.env.DONEFY_EMAIL ?? '',
+    mode: parseMode(process.env.LINKFY_MODE),
   }
 }
 
@@ -129,6 +134,18 @@ export function parseWorkingHours(
     endHour: valid ? endHour : DEFAULT_WORKING_HOURS.endHour,
     activeDays: parsedDays.length > 0 ? parsedDays : DEFAULT_WORKING_HOURS.activeDays,
   }
+}
+
+/**
+ * Copilot unless told otherwise, and an unrecognised value falls back to it
+ * rather than throwing. This setting decides whether messages go out in your
+ * name unattended; a typo should land on the cautious side of that, not stop
+ * the agent from starting.
+ */
+function parseMode(value: string | undefined): OrchestratorMode {
+  const modes: OrchestratorMode[] = ['copilot', 'assisted', 'autopilot']
+  const found = modes.find((m) => m === value?.trim().toLowerCase())
+  return found ?? 'copilot'
 }
 
 function positiveInt(value: string | undefined, fallback: number): number {
