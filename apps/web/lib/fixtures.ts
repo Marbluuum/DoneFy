@@ -248,6 +248,8 @@ export type FixturePost = {
   /** Comments that matched a keyword, if an automation covers this post. */
   matched?: number
   automation?: string
+  /** Present on real posts; the fixtures have none. */
+  url?: string
 }
 
 export const POSTS: FixturePost[] = [

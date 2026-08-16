@@ -299,3 +299,71 @@ export async function extractPendingInvites(page: Page): Promise<string[]> {
     .filter((identifier) => identifier.length > 0)
   return [...new Set(identifiers)]
 }
+
+/** Runs in the page. Keep self-contained: no imports, no closures. */
+function extractOwnPostsInPage(): Array<{ urn: string; excerpt: string }> {
+  // Every post carries its activity URN in `data-urn` or in a permalink, and
+  // both survive a class rename because routing depends on them. The feed of
+  // your own activity has no stable container name at all.
+  const seen = new Set<string>()
+  const found: Array<{ urn: string; excerpt: string }> = []
+
+  const candidates = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-urn], a[href*="/feed/update/"]'),
+  )
+
+  for (const element of candidates) {
+    const raw =
+      element.getAttribute('data-urn') ??
+      element.getAttribute('href') ??
+      ''
+    const match = raw.match(/urn:li:(?:activity|ugcPost):\d+/)
+    if (!match) continue
+
+    const urn = match[0]
+    if (seen.has(urn)) continue
+    seen.add(urn)
+
+    // Climb to the block that holds the post's text. Stopping at the first
+    // ancestor with a decent amount of text keeps a permalink inside a
+    // comment from dragging in the whole page.
+    let node: HTMLElement | null = element
+    let excerpt = ''
+    for (let i = 0; i < 6 && node; i++) {
+      const text = (node.innerText ?? '').trim()
+      if (text.length > 40) {
+        excerpt = text
+        break
+      }
+      node = node.parentElement
+    }
+
+    found.push({ urn, excerpt: excerpt.slice(0, 400) })
+  }
+
+  return found
+}
+
+export type OwnPost = {
+  urn: string
+  url: string
+  excerpt: string
+}
+
+/**
+ * The account's own recent posts.
+ *
+ * Reading your own publications needs no permission and no extension — the
+ * agent is already signed in as you. It exists so nobody has to paste an
+ * activity URL by hand, which is the step where a wrong copy produces an
+ * automation that watches a post that does not exist and reports nothing
+ * wrong.
+ */
+export async function extractOwnPosts(page: Page, limit = 20): Promise<OwnPost[]> {
+  const found = await page.evaluate(extractOwnPostsInPage)
+  return found.slice(0, limit).map((post) => ({
+    urn: post.urn,
+    url: `https://www.linkedin.com/feed/update/${post.urn}/`,
+    excerpt: post.excerpt,
+  }))
+}

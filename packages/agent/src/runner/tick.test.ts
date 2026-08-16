@@ -115,6 +115,8 @@ function fakeRepo(state: FakeState): Repository {
     },
     recordEvent: async () => {},
     conversingEnrollments: async () => state.conversing,
+    postsSyncedAt: async () => new Date(),
+    savePosts: async () => 0,
     history: async (id) => state.threads[id] ?? [],
     openEnrollmentFor: async (_a, identifier) =>
       [...state.due, ...state.conversing].find((e) => e.publicIdentifier === identifier) ?? null,
@@ -141,6 +143,7 @@ function fakeAdapter(overrides: Partial<LinkedInAdapter> = {}, state?: FakeState
     }),
     sendInvite: async () => ({ sent: true, withNote: true }),
     listPendingInvites: async () => state?.pendingInvites ?? [],
+    listOwnPosts: async () => [],
     withdrawInvite: async () => true,
     sendMessage: async () => {},
     listConversations: async () => [],

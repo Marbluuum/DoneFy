@@ -767,6 +767,46 @@ export class DrizzleRepository implements Repository {
       .where(eq(enrollments.id, input.enrollmentId))
   }
 
+  async postsSyncedAt(accountId: string): Promise<Date | null> {
+    const [row] = await this.db
+      .select({ at: linkedinAccounts.postsSyncedAt })
+      .from(linkedinAccounts)
+      .where(eq(linkedinAccounts.id, accountId))
+      .limit(1)
+    return row?.at ?? null
+  }
+
+  async savePosts(
+    accountId: string,
+    incoming: Array<{ urn: string; url: string; excerpt: string }>,
+    at: Date,
+  ): Promise<number> {
+    let saved = 0
+    for (const post of incoming) {
+      // The excerpt is refreshed but never blanked: a later read that failed to
+      // pick up the text should not wipe the description the panel shows.
+      await this.db
+        .insert(posts)
+        .values({ accountId, urn: post.urn, url: post.url, excerpt: post.excerpt || null })
+        .onConflictDoUpdate({
+          target: [posts.accountId, posts.urn],
+          set: {
+            url: post.url,
+            ...(post.excerpt ? { excerpt: post.excerpt } : {}),
+            lastScannedAt: at,
+          },
+        })
+      saved++
+    }
+
+    await this.db
+      .update(linkedinAccounts)
+      .set({ postsSyncedAt: at })
+      .where(eq(linkedinAccounts.id, accountId))
+
+    return saved
+  }
+
   async touchAccount(accountId: string, at: Date): Promise<void> {
     await this.db
       .update(linkedinAccounts)

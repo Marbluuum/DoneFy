@@ -83,6 +83,7 @@ CREATE TABLE "linkedin_accounts" (
 	"display_name" text,
 	"is_premium" integer DEFAULT 0 NOT NULL,
 	"agent_last_seen_at" timestamp with time zone,
+	"posts_synced_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

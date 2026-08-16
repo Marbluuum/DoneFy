@@ -15,12 +15,27 @@ import { createAutomation, setAutomationMode, setAutomationStatus } from '../act
  * automation with no keyword fires on every comment, and that is the one
  * mistake here with a cost measured in real people.
  */
-export function NewAutomation({ live }: { live: boolean }) {
-  const [open, setOpen] = useState(false)
+export function NewAutomation({
+  live,
+  posts = [],
+  initialPostUrl,
+}: {
+  live: boolean
+  /** The account's own posts, so the trigger is picked rather than pasted. */
+  posts?: Array<{ id: string; url?: string; excerpt: string; postedAt: string }>
+  initialPostUrl?: string
+}) {
+  const [open, setOpen] = useState(Boolean(initialPostUrl))
+
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
-  const [form, setForm] = useState({ name: '', keywords: '', postUrl: '', calendarUrl: '' })
+  const [form, setForm] = useState({
+    name: '',
+    keywords: '',
+    postUrl: initialPostUrl ?? '',
+    calendarUrl: '',
+  })
   const set = (key: keyof typeof form) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [key]: e.target.value }))
 
@@ -76,13 +91,43 @@ export function NewAutomation({ live }: { live: boolean }) {
           onChange={set('keywords')}
           placeholder="software, sistema"
         />
-        <Field
-          label="Publicación"
-          hint="Dejalo vacío para vigilar todas tus publicaciones"
-          value={form.postUrl}
-          onChange={set('postUrl')}
-          placeholder="https://www.linkedin.com/feed/update/urn:li:activity:…"
-        />
+        <div>
+          <span className="mb-1 block text-xs font-medium">Publicación</span>
+
+          {/* Picked from what the agent already read, because pasting an
+              activity URL is the one step here that fails silently: a wrong
+              copy watches a post that does not exist and never fires. */}
+          {posts.length > 0 ? (
+            <select
+              value={form.postUrl}
+              onChange={set('postUrl')}
+              className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              <option value="">Todas mis publicaciones</option>
+              {posts.map((post) => (
+                <option key={post.id} value={post.url ?? ''}>
+                  {post.excerpt.slice(0, 70)}
+                  {post.excerpt.length > 70 ? '…' : ''} · {post.postedAt}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={form.postUrl}
+              onChange={set('postUrl')}
+              placeholder="https://www.linkedin.com/feed/update/urn:li:activity:…"
+              className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
+              style={{ borderColor: 'var(--border)' }}
+            />
+          )}
+
+          <span className="mt-1 block text-[11px] muted">
+            {posts.length > 0
+              ? 'Sincronizadas por el agente'
+              : 'Todavía no leí tus publicaciones — pegá la URL o esperá al próximo ciclo del agente'}
+          </span>
+        </div>
         <Field
           label="Link de tu agenda"
           hint="El que paso cuando piden horarios"

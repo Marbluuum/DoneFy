@@ -41,6 +41,12 @@ export type ConversationSummary = {
   snippet: string
 }
 
+export type OwnPost = {
+  urn: string
+  url: string
+  excerpt: string
+}
+
 export type ThreadMessage = {
   from: 'owner' | 'lead'
   body: string
@@ -57,6 +63,12 @@ export interface LinkedInAdapter {
 
   /** Comments on a post, newest first, paginating up to `limit`. */
   readComments(postUrl: string, limit: number): Promise<PostComment[]>
+
+  /**
+   * The account's own recent posts, so automations can be built by picking one
+   * instead of pasting an activity URL.
+   */
+  listOwnPosts(publicIdentifier: string, limit: number): Promise<OwnPost[]>
 
   /** Public reply under a specific comment. */
   replyToComment(postUrl: string, commentUrn: string, body: string): Promise<void>

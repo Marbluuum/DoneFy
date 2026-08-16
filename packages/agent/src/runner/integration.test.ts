@@ -56,6 +56,9 @@ const POST_URL = 'https://www.linkedin.com/feed/update/urn:li:activity:7000'
  * Who still has an outstanding invitation, per LinkedIn. Defaults to the leads
  * the earlier tests invite, so reconciliation leaves them alone.
  */
+/** The account's own posts, as LinkedIn would report them. */
+let ownPosts: Array<{ urn: string; url: string; excerpt: string }> = []
+
 let pendingInvites: string[] = ['wendy-torres', 'piero-storace']
 
 /** Connection degree per profile. Anyone not listed is a 2nd degree stranger. */
@@ -90,6 +93,7 @@ function fakeLinkedIn(): LinkedInAdapter {
       return { sent: true, withNote: Boolean(note) }
     },
     listPendingInvites: async () => pendingInvites,
+    listOwnPosts: async () => ownPosts,
     withdrawInvite: async () => true,
     sendMessage: async (_id, body) => {
       performed.push(`dm:${body}`)
@@ -589,5 +593,56 @@ describe('modo por automatización', () => {
     assert.ok(result.proposed > 0 || (row!.suggestions ?? []).length > 0, 'lo propone, no lo manda')
 
     await db.update(automations).set({ mode: 'copilot' }).where(eq(automations.id, automationId))
+  })
+})
+
+describe('publicaciones propias', () => {
+  test('the account\'s own posts are read so nobody pastes a URL', async () => {
+    // Pasting an activity URL by hand is the step where one bad copy produces
+    // an automation watching a post that does not exist — which reports
+    // nothing wrong and simply never fires.
+    ownPosts = [
+      {
+        urn: 'urn:li:activity:9001',
+        url: 'https://www.linkedin.com/feed/update/urn:li:activity:9001/',
+        excerpt: 'Mapeé 3.300 family offices y esto es lo que aprendí.',
+      },
+    ]
+
+    await db.update(linkedinAccounts).set({ postsSyncedAt: null }).where(eq(linkedinAccounts.id, accountId))
+    await tick()
+
+    const [saved] = await db
+      .select({ url: posts.url, excerpt: posts.excerpt })
+      .from(posts)
+      .where(eq(posts.urn, 'urn:li:activity:9001'))
+
+    assert.ok(saved, 'quedó guardada')
+    assert.match(saved!.excerpt ?? '', /family offices/)
+  })
+
+  test('they are not re-read on every cycle', async () => {
+    // Publications change a few times a week. Loading the activity feed every
+    // ninety seconds is page traffic that buys nothing and looks like a bot.
+    let reads = 0
+
+    await runTick({
+      accountId,
+      repo,
+      linkedin: {
+        ...fakeLinkedIn(),
+        listOwnPosts: async () => {
+          reads++
+          return ownPosts
+        },
+      },
+      classifier: { classify: async () => ({ intent: 'unclear' as const, confidence: 0, signals: {}, rationale: '' }) },
+      writer: { inviteNote: async () => 'nota' },
+      workingHours: DEFAULT_WORKING_HOURS,
+      now: () => clock,
+      leaseHolder: 'test',
+    })
+
+    assert.equal(reads, 0, 'ya se habían leído recién')
   })
 })

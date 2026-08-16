@@ -40,6 +40,15 @@ export const linkedinAccounts = pgTable('linkedin_accounts', {
   /** Set by the agent on every successful tick, so the panel can show liveness. */
   agentLastSeenAt: timestamp('agent_last_seen_at', { withTimezone: true }),
 
+  /**
+   * When the account's own posts were last read.
+   *
+   * Rate-limited rather than done every cycle: your own publications change a
+   * few times a week, and loading the activity feed every ninety seconds is
+   * page traffic that buys nothing.
+   */
+  postsSyncedAt: timestamp('posts_synced_at', { withTimezone: true }),
+
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex('linkedin_accounts_user_identifier_idx').on(t.userId, t.publicIdentifier),

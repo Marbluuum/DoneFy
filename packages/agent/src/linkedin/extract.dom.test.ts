@@ -3,7 +3,7 @@ import { after, before, test } from 'node:test'
 
 import { chromium, type Browser, type Page } from 'playwright'
 
-import { extractComments, extractPendingInvites } from './extract.js'
+import { extractComments, extractOwnPosts, extractPendingInvites } from './extract.js'
 
 /**
  * Runs the extractor against a synthetic DOM built to match what LinkedIn
@@ -165,4 +165,51 @@ test('an invitations page with nobody on it reads as empty, not as an error', as
 
   await page.setContent('<html><body><main><p>No tenés invitaciones pendientes</p></main></body></html>')
   assert.deepEqual(await extractPendingInvites(page), [])
+})
+
+test('own posts are read from the activity URN, wherever it is carried', async (t) => {
+  if (!page) {
+    t.skip(`sin navegador: ${unavailable}`)
+    return
+  }
+
+  // LinkedIn puts the URN in `data-urn` on some surfaces and only in a
+  // permalink on others. Both survive a class rename, because routing depends
+  // on them, so both are read rather than picking one and hoping.
+  await page.setContent(`<html><body>
+    <div data-urn="urn:li:activity:7000">
+      <p>Las empresas de tecnología no tienen un problema de producto, tienen uno de distribución.</p>
+    </div>
+    <div>
+      <a href="/feed/update/urn:li:activity:7001/">
+        <span>Cold calling is NOT rocket science. So stop acting like it is, por favor.</span>
+      </a>
+    </div>
+  </body></html>`)
+
+  const own = await extractOwnPosts(page)
+  assert.deepEqual(
+    own.map((p) => p.urn),
+    ['urn:li:activity:7000', 'urn:li:activity:7001'],
+  )
+  assert.match(own[0]!.excerpt, /distribución/)
+  assert.equal(own[0]!.url, 'https://www.linkedin.com/feed/update/urn:li:activity:7000/')
+})
+
+test('the same post carried twice is returned once', async (t) => {
+  if (!page) {
+    t.skip(`sin navegador: ${unavailable}`)
+    return
+  }
+
+  // A post usually carries its URN on the container *and* on its permalink.
+  // Counting both would show every publication twice in the picker.
+  await page.setContent(`<html><body>
+    <div data-urn="urn:li:activity:7002">
+      <p>Un texto suficientemente largo como para servir de extracto del post.</p>
+      <a href="/feed/update/urn:li:activity:7002/">Ver publicación</a>
+    </div>
+  </body></html>`)
+
+  assert.equal((await extractOwnPosts(page)).length, 1)
 })

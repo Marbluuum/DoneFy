@@ -118,6 +118,8 @@ export async function runTick(deps: TickDeps): Promise<TickResult> {
   const automations = await deps.repo.activeAutomations(deps.accountId)
   const ownIdentifier = await deps.repo.ownIdentifier(deps.accountId)
 
+  await syncOwnPosts(deps, ownIdentifier, now, log)
+
   for (const automation of automations) {
     for (const postUrl of automation.postUrls) {
       const comments = await deps.linkedin
@@ -510,6 +512,43 @@ async function readInbound(
   }
 
   return recorded
+}
+
+/** How often the account's own posts are re-read. */
+const POST_SYNC_MS = 6 * 60 * 60 * 1000
+
+/**
+ * Keeps the list of the owner's own posts current.
+ *
+ * It exists so nobody pastes an activity URL by hand — the step where one bad
+ * copy produces an automation watching a post that does not exist, which
+ * reports no error and simply never fires.
+ *
+ * Rate-limited because publications change a few times a week and the activity
+ * feed is a page load: doing it every ninety seconds is traffic that buys
+ * nothing.
+ */
+async function syncOwnPosts(
+  deps: TickDeps,
+  ownIdentifier: string,
+  now: Date,
+  log: (message: string, data?: Record<string, unknown>) => void,
+): Promise<void> {
+  if (!ownIdentifier) return
+
+  const last = await deps.repo.postsSyncedAt(deps.accountId)
+  if (last && now.getTime() - last.getTime() < POST_SYNC_MS) return
+
+  try {
+    const own = await deps.linkedin.listOwnPosts(ownIdentifier, 20)
+    if (own.length === 0) return
+    const saved = await deps.repo.savePosts(deps.accountId, own, now)
+    log(`publicaciones sincronizadas: ${saved}`)
+  } catch (error) {
+    // Never fatal. Automations already pointing at a post keep working; only
+    // the picker in the panel goes stale.
+    log('no se pudieron leer tus publicaciones', { error: String(error) })
+  }
 }
 
 /** How long before a pending invitation is worth looking at again. */

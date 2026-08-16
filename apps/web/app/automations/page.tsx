@@ -18,7 +18,7 @@ export default async function AutomationsPage() {
           <h1 className="text-xl font-semibold tracking-tight">Automatizaciones</h1>
           <p className="text-sm muted">Elegí una publicación y las palabras que la disparan</p>
         </div>
-        <NewAutomation live={live} />
+        <NewAutomation live={live} posts={POSTS} />
       </header>
 
       {automations.length === 0 && live && (
@@ -119,12 +119,10 @@ export default async function AutomationsPage() {
                     <p className="text-xs font-medium">{post.automation}</p>
                   </>
                 ) : (
-                  <button
-                    className="rounded-lg border px-3 py-1.5 text-xs transition-colors hover:bg-[var(--accent-soft)]"
-                    style={{ borderColor: 'var(--border)' }}
-                  >
-                    Automatizar
-                  </button>
+                  // No per-post button: the form above already lists every
+                  // post in its picker, and two ways in is two things to keep
+                  // working for no capability the other does not have.
+                  <p className="text-[11px] muted">Sin automatizar</p>
                 )}
               </div>
             </div>

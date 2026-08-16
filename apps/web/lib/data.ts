@@ -218,9 +218,14 @@ export async function getPanelData(): Promise<PanelData> {
     matchedByPost.set(lead.postUrl, (matchedByPost.get(lead.postUrl) ?? 0) + 1)
   }
 
+  const automationByPostId = new Map<string, string>()
+
   const panelPosts: FixturePost[] = watched.map((post) => ({
     id: post.id,
+    // The URL is a poor label but a truthful one; it only shows before the
+    // agent has read the post's text.
     excerpt: post.excerpt ?? post.url,
+    url: post.url,
     postedAt: relativeTime(post.createdAt),
     reactions: 0,
     comments: 0,
@@ -276,6 +281,13 @@ export async function getPanelData(): Promise<PanelData> {
     .orderBy(desc(automations.createdAt))
 
   const postUrlById = new Map(watched.map((p) => [p.id, p.url]))
+
+  for (const row of automationRows) {
+    for (const postId of row.postIds ?? []) automationByPostId.set(postId, row.name)
+  }
+  for (const post of panelPosts) {
+    post.automation = automationByPostId.get(post.id)
+  }
 
   const panelAutomations: PanelAutomation[] = automationRows.map((row) => {
     const mine = rows.filter((r) => r.automationId === row.id)

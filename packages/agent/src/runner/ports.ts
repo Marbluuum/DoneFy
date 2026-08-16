@@ -181,6 +181,14 @@ export interface Repository {
 
   /** Liveness, so the panel can tell a quiet agent from a dead one. */
   touchAccount(accountId: string, at: Date): Promise<void>
+
+  /** When the account's own posts were last read, and where to record it. */
+  postsSyncedAt(accountId: string): Promise<Date | null>
+  savePosts(
+    accountId: string,
+    posts: Array<{ urn: string; url: string; excerpt: string }>,
+    at: Date,
+  ): Promise<number>
 }
 
 export interface Classifier {

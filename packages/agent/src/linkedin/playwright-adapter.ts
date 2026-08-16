@@ -5,6 +5,7 @@ import {
   AdapterError,
   type ConversationSummary,
   type InviteResult,
+  type OwnPost,
   type LinkedInAdapter,
   type PostComment,
   type ProfileSummary,
@@ -14,6 +15,7 @@ import { assertSignedIn, findFirst, navigate, requireFirst, typeHumanly } from '
 import {
   extractComments,
   extractConversations,
+  extractOwnPosts,
   extractPendingInvites,
   extractThreadMessages,
   findSendButton,
@@ -135,6 +137,14 @@ export class PlaywrightLinkedInAdapter implements LinkedInAdapter {
     await this.pace()
     await submit.click()
     await page.waitForTimeout(2500)
+  }
+
+  async listOwnPosts(publicIdentifier: string, limit: number): Promise<OwnPost[]> {
+    const page = await this.page()
+    await this.pace()
+    await navigate(page, URLS.recentActivity(publicIdentifier))
+    await page.waitForTimeout(3500)
+    return extractOwnPosts(page, limit)
   }
 
   async likeComment(postUrl: string, commentUrn: string): Promise<boolean> {

@@ -1,5 +1,5 @@
 {
-  "id": "62b924e1-30ba-4164-b570-14fbea531a13",
+  "id": "c11b449f-be45-464d-b89b-d824799a2ac2",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -750,6 +750,12 @@
         },
         "agent_last_seen_at": {
           "name": "agent_last_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "posts_synced_at": {
+          "name": "posts_synced_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
