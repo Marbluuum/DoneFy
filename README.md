@@ -265,19 +265,38 @@ Two constraints shape it:
 ## First run
 
 ```bash
-npm install
-npm test                                    # 96 tests
-cp .env.example .env                        # fill in DATABASE_URL
-
-npm run check-session -w @linkfy/agent
+npm start
 ```
 
-`check-session` opens the browser and verifies LinkedIn sees a live session.
-On the first run the profile is empty — a window opens, you log in by hand, and
-it persists from then on. **That login is the only manual step in the setup**,
-and running this before anything that sends is worth the minute: a dead session
-otherwise fails every job in the queue one at a time, each looking like a
-separate problem.
+One command. It works out what is missing — the `.env`, the tables, the
+LinkedIn login — does each in the order the next one depends on, and then runs
+the agent and the panel together. The panel lands on http://localhost:3000.
+
+The only manual step is logging into LinkedIn once, in the Chrome window it
+opens. That profile keeps the session from then on.
+
+Every terminal starts in your home directory, and none of these commands work
+from there. Worth adding once:
+
+```bash
+echo 'linkfy() { (cd ~/Documents/Linkfy && npm run "${1:-start}") }' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Then `linkfy` starts it from anywhere, and `linkfy doctor` diagnoses it.
+
+## When nothing happens
+
+```bash
+npm run doctor
+```
+
+A dozen states produce "nothing happens" and each is silent on its own: no
+tables, no account, no automation, a keyword nobody commented, a stopped agent,
+a dead session. This walks the chain in dependency order and stops at the first
+break, with the command that fixes it — and prints what has actually happened,
+which is what separates "misconfigured" from "configured, and nobody has
+commented yet".
 
 Two branches carry most of the value:
 
@@ -300,23 +319,25 @@ for.
 - Nothing is scheduled outside configured working hours.
 - Every send is jittered; the DM after an accepted invite waits 2–6 hours.
 
-## Setup
+## Working on it
 
 ```bash
 npm install
-npx tsc --build
-node --test packages/core/dist/engine.test.js
-
-cp .env.example .env    # then fill in DATABASE_URL from Supabase
-npm run db:push
+npm test          # 194 tests, no browser or account needed
+npm run build
 ```
+
+The suite runs against a real Postgres — PGlite, which is Postgres compiled to
+wasm — so conflict targets, atomic increments and `FOR UPDATE SKIP LOCKED` are
+exercised rather than assumed. The DOM extraction runs against real Chromium
+with synthetic pages, so a broken selector is caught here and not on someone's
+account.
 
 ## Status
 
-Core engine and schema are done and green. Next up is `packages/agent` — the
-Chrome driver, the comment scanner, and the LLM step that writes the invite note
-against the person's headline and what they actually commented.
+The whole loop runs: keyword comment → like → public reply → personalized
+invite → acceptance detected → opening DM → conversation, with replies proposed
+in the panel or sent unattended depending on the mode.
 
-The LinkedIn adapter sits behind an interface on purpose, so the execution layer
-can be swapped (a hosted API such as Unipile, say) without the engine or the
-panel knowing about it.
+Not done yet: withdrawing expired invitations to reclaim cap, per-automation
+autonomy modes, and the visual flow builder.
