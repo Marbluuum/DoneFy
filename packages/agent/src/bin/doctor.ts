@@ -221,9 +221,14 @@ finish()
 
 function finish(): never {
   if (failed) {
-    console.log('\nArreglá lo marcado con ❌ y volvé a correr `npm run doctor`.\n')
-    process.exit(1)
+    console.log('\nArreglá lo marcado con ❌ y volvé a correr `linkfy doctor`.\n')
+  } else {
+    console.log('\nTodo en orden.\n')
   }
-  console.log('\nTodo en orden.\n')
+
+  // Always zero. Finding a problem is this command succeeding — exiting
+  // non-zero makes npm print a "Lifecycle script failed" dump underneath the
+  // report, which reads as the diagnosis itself having crashed and buries the
+  // one line that says what to do.
   process.exit(0)
 }
