@@ -15,7 +15,8 @@
     "inspect-dom": "npm run build && node dist/bin/inspect-dom.js",
     "init": "npm run build && node dist/bin/init.js",
     "agent": "npm run build && node dist/bin/run-agent.js",
-    "automation": "npm run build && node dist/bin/automation.js"
+    "automation": "npm run build && node dist/bin/automation.js",
+    "doctor": "npm run build && node dist/bin/doctor.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

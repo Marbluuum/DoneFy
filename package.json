@@ -20,7 +20,8 @@
     "db:push": "npm run db:push -w @linkfy/db",
     "init": "npm run init -w @linkfy/agent",
     "agent": "npm run agent -w @linkfy/agent",
-    "automation": "npm run automation -w @linkfy/agent --"
+    "automation": "npm run automation -w @linkfy/agent --",
+    "doctor": "npm run doctor -w @linkfy/agent"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
