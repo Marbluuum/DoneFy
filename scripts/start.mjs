@@ -114,7 +114,7 @@ if (automations.output.includes('No hay automatizaciones')) {
 }
 
 console.log('\n✅ Todo listo. Arrancando.\n')
-console.log('   Panel:  http://localhost:3000')
+console.log(`   Panel:  http://localhost:${process.env.PANEL_PORT ?? 2500}`)
 console.log('   Ctrl-C para parar los dos.\n')
 
 const agent = tail('agente', 'npm', ['run', 'agent'], '[35m')

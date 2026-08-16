@@ -270,7 +270,7 @@ npm start
 
 One command. It works out what is missing — the `.env`, the tables, the
 LinkedIn login — does each in the order the next one depends on, and then runs
-the agent and the panel together. The panel lands on http://localhost:3000.
+the agent and the panel together. The panel lands on http://localhost:2500 (set `PANEL_PORT` to move it).
 
 The only manual step is logging into LinkedIn once, in the Chrome window it
 opens. That profile keeps the session from then on.
