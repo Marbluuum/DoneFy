@@ -11,6 +11,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "start": "node scripts/start.mjs",
     "setup": "node scripts/setup.mjs",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "tsc --build",
