@@ -41,18 +41,67 @@ const context = await launchBrowser({
 
 const page = context.pages()[0] ?? (await context.newPage())
 
-// /in/me/ redirects to your own profile, so the final URL carries the public
-// identifier. No scraping and no parsing of a page that changes every deploy.
+/**
+ * Waits for the login instead of failing on it.
+ *
+ * On a fresh profile there is no session yet — that is the expected state, not
+ * an error. Checking once and exiting would mean the browser opens, the tool
+ * gives up while the person is still reaching for their password, and the
+ * setup they were halfway through has to be started again.
+ *
+ * /in/me/ redirects to your own profile, so the final URL carries the public
+ * identifier. No scraping, and no parsing of a page that changes every deploy.
+ */
+const LOGIN_WAIT_MS = 5 * 60_000
+const POLL_MS = 3_000
+
 await navigate(page, 'https://www.linkedin.com/in/me/')
-const finalUrl = page.url()
-const verdict = readSessionFromUrl(finalUrl)
+let verdict = readSessionFromUrl(page.url())
+let announced = false
+
+const deadline = Date.now() + LOGIN_WAIT_MS
+while (verdict.state !== 'signed_in' && !config.headless && Date.now() < deadline) {
+  if (verdict.state === 'checkpoint') {
+    console.error(`\n❌ LinkedIn está pidiendo verificación: ${verdict.reason}`)
+    console.error('   Resolvela en la ventana que se abrió y volvé a correr `npm start`.')
+    await context.close()
+    process.exit(1)
+  }
+
+  if (!announced) {
+    console.log('Logueate a LinkedIn en la ventana que se abrió.')
+    console.log('Te espero — cuando entres sigo solo.\n')
+    announced = true
+  }
+
+  await page.waitForTimeout(POLL_MS)
+  // Re-read rather than re-navigating: navigating on a loop would interrupt
+  // the login form being filled in.
+  verdict = readSessionFromUrl(page.url())
+  if (verdict.state !== 'signed_in' && !page.url().includes('linkedin.com')) {
+    await navigate(page, 'https://www.linkedin.com/in/me/')
+    verdict = readSessionFromUrl(page.url())
+  }
+}
+
+if (verdict.state !== 'signed_in') {
+  // One last navigation: after logging in, LinkedIn usually lands on the feed
+  // rather than on the profile that was asked for.
+  await navigate(page, 'https://www.linkedin.com/in/me/')
+  verdict = readSessionFromUrl(page.url())
+}
 
 if (verdict.state !== 'signed_in') {
   console.error(`\n❌ ${verdict.reason}`)
-  console.error('   Corré `npm run check-session -w @linkfy/agent` y logueate una vez.')
+  console.error('   Corré `npm run init` de nuevo cuando estés logueado.')
   await context.close()
   process.exit(1)
 }
+
+if (!page.url().includes('/in/')) {
+  await navigate(page, 'https://www.linkedin.com/in/me/')
+}
+const finalUrl = page.url()
 
 const publicIdentifier = finalUrl.match(/\/in\/([^/?#]+)/)?.[1]
 if (!publicIdentifier || publicIdentifier === 'me') {
