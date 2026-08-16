@@ -11,18 +11,17 @@
  *
  * Existing values are kept unless a new one is entered, so re-running it to
  * change one setting does not wipe the others.
+ *
+ * The flow itself lives in setup-flow.mjs; this file is only the readline
+ * wiring around it.
  */
 
 import { createInterface } from 'node:readline/promises'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { stdin, stdout } from 'node:process'
 
-import {
-  parseEnv,
-  renderEnv,
-  validateAnthropicKey,
-  validateDatabaseUrl,
-} from './setup-validate.mjs'
+import { runSetup } from './setup-flow.mjs'
+import { parseEnv } from './setup-validate.mjs'
 
 const ENV_PATH = '.env'
 
@@ -33,52 +32,38 @@ if (!stdin.isTTY) {
 }
 
 const rl = createInterface({ input: stdin, output: stdout })
-// Ctrl-D or a closed pipe should exit cleanly rather than hang on an await
-// that will never resolve.
-rl.on('close', () => process.exit(0))
 
-const existing = existsSync(ENV_PATH) ? parseEnv(readFileSync(ENV_PATH, 'utf8')) : {}
+// Ctrl-D closes the stream while a question is pending, and that question's
+// promise then never resolves — the script would hang with no explanation. So
+// the pending question races against the close instead.
+//
+// It has to be a race rather than a `close` handler that exits: `close` also
+// fires on the deliberate rl.close() below, and an exit there ran *before* the
+// file was written. The setup looked like it worked and silently produced
+// nothing.
+const CANCELLED = Symbol('cancelled')
+const cancelled = new Promise((resolve) => rl.once('close', () => resolve(CANCELLED)))
 
-function mask(value) {
-  if (!value) return '(vacío)'
-  return value.length <= 12 ? '••••' : `${value.slice(0, 8)}…${value.slice(-4)}`
-}
-
-async function ask(label, current, validate) {
-  console.log(`\n${label}`)
-  if (current) console.log(`   actual: ${mask(current)}  — enter para dejarlo así`)
-
-  for (;;) {
-    const answer = (await rl.question('   > ')).trim()
-    if (!answer && current) return current
-
-    const error = validate(answer)
-    if (error) {
-      console.log(`   ⚠️  ${error}`)
-      continue
-    }
-    return answer
+async function prompt(question) {
+  const answer = await Promise.race([rl.question(question), cancelled])
+  if (answer === CANCELLED) {
+    console.log('\nCancelado. No se guardó nada.')
+    process.exit(0)
   }
+  return answer
 }
 
 console.log('\nConfiguración de DoneFy')
 console.log('═══════════════════════')
 
-const databaseUrl = await ask(
-  '1. URL de Supabase\n   Panel de Supabase → botón "Connect" → Session pooler → copiá la URI\n   Acordate de reemplazar [YOUR-PASSWORD] por tu contraseña.',
-  existing.DATABASE_URL,
-  validateDatabaseUrl,
-)
-
-const anthropicKey = await ask(
-  '2. API key de Anthropic\n   console.anthropic.com → API Keys → Create Key',
-  existing.ANTHROPIC_API_KEY,
-  validateAnthropicKey,
-)
+await runSetup({
+  prompt,
+  log: (line) => console.log(line),
+  existing: existsSync(ENV_PATH) ? parseEnv(readFileSync(ENV_PATH, 'utf8')) : {},
+  write: (contents) => writeFileSync(ENV_PATH, contents, 'utf8'),
+})
 
 rl.close()
-
-writeFileSync(ENV_PATH, renderEnv({ databaseUrl, anthropicKey, existing }), 'utf8')
 
 console.log('\n✅ .env guardado.')
 console.log('\nAhora creá las tablas:')
