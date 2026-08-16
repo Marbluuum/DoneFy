@@ -131,15 +131,16 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
   })
 }
 
-// If either half dies on its own, the other is not much use — and two windows
-// where one is silently dead is worse than a clean stop.
-for (const [name, child] of [['El agente', agent], ['El panel', panel]]) {
+// One half dying does not take the other down. The first version did, and it
+// had this exactly backwards: the agent failing is precisely when the panel is
+// worth having open, because the panel is where you see what happened. What
+// matters is that a dead half is never silent.
+const restart = { agente: 'npm run agent', 'panel ': 'npm run dev -w @linkfy/web' }
+
+for (const [name, child] of [['agente', agent], ['panel ', panel]]) {
   child.on('close', (code) => {
     if (stopping) return
-    stopping = true
-    if (code !== 0) console.error(`\n❌ ${name} se cerró con error.`)
-    agent.kill('SIGINT')
-    panel.kill('SIGINT')
-    process.exit(code ?? 0)
+    console.error(`\n❌ ${name.trim()} se cerró${code ? ` con error (${code})` : ''}.`)
+    console.error(`   El resto sigue andando. Para reintentarlo: ${restart[name]}\n`)
   })
 }
