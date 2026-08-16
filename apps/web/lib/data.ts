@@ -42,8 +42,21 @@ import {
 
 export type PanelHealth = Omit<typeof FIXTURE_HEALTH, 'state'> & { state: HealthState }
 
+export type PanelAutomation = {
+  id: string
+  name: string
+  status: string
+  keywords: string[]
+  postUrls: string[]
+  calendarUrl: string
+  /** People this automation has pulled in, and how many booked. */
+  enrolled: number
+  booked: number
+}
+
 export type PanelData = {
   live: boolean
+  automations: PanelAutomation[]
   leads: FixtureLead[]
   posts: FixturePost[]
   funnel: typeof FIXTURE_FUNNEL
@@ -59,6 +72,7 @@ export async function getPanelData(): Promise<PanelData> {
   if (!url || !accountId) {
     return {
       live: false,
+      automations: [],
       leads: FIXTURE_LEADS,
       posts: FIXTURE_POSTS,
       funnel: FIXTURE_FUNNEL,
@@ -77,6 +91,7 @@ export async function getPanelData(): Promise<PanelData> {
   if (!account) {
     return {
       live: false,
+      automations: [],
       leads: FIXTURE_LEADS,
       posts: FIXTURE_POSTS,
       funnel: FIXTURE_FUNNEL,
@@ -100,6 +115,7 @@ export async function getPanelData(): Promise<PanelData> {
       suggestions: enrollments.suggestions,
       agentNotes: enrollments.agentNotes,
       autoReply: enrollments.autoReply,
+      automationId: enrollments.automationId,
       keyword: enrollments.matchedKeyword,
       comment: enrollments.commentText,
       postUrl: posts.url,
@@ -243,8 +259,40 @@ export async function getPanelData(): Promise<PanelData> {
     'booked',
   )
 
+  const automationRows = await db
+    .select({
+      id: automations.id,
+      name: automations.name,
+      status: automations.status,
+      keywords: automations.keywords,
+      postIds: automations.postIds,
+      flow: automations.flow,
+    })
+    .from(automations)
+    .where(eq(automations.accountId, account.id))
+    .orderBy(desc(automations.createdAt))
+
+  const postUrlById = new Map(watched.map((p) => [p.id, p.url]))
+
+  const panelAutomations: PanelAutomation[] = automationRows.map((row) => {
+    const mine = rows.filter((r) => r.automationId === row.id)
+    return {
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      keywords: row.keywords ?? [],
+      // An empty list means every post on the account, which the page says in
+      // words rather than showing as zero — zero reads as broken.
+      postUrls: (row.postIds ?? []).map((id) => postUrlById.get(id) ?? '').filter(Boolean),
+      calendarUrl: calendarUrlOf(row.flow),
+      enrolled: mine.length,
+      booked: mine.filter((r) => r.state === 'booked').length,
+    }
+  })
+
   return {
     live: true,
+    automations: panelAutomations,
     leads,
     posts: panelPosts,
     funnel: {
@@ -274,6 +322,15 @@ export function needsYou(leads: FixtureLead[]): number {
 
 export function isTerminalState(state: string): boolean {
   return TERMINAL_STATES.has(state as EnrollmentState)
+}
+
+function calendarUrlOf(flow: unknown): string {
+  const nodes = (flow as { nodes?: Array<{ config?: Record<string, unknown> }> } | null)?.nodes ?? []
+  for (const node of nodes) {
+    const url = node.config?.calendarUrl
+    if (typeof url === 'string' && url) return url
+  }
+  return ''
 }
 
 function initialsOf(name: string): string {

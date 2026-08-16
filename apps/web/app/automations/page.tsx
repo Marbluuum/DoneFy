@@ -1,4 +1,5 @@
 import { getPanelData } from '@/lib/data'
+import { NewAutomation, StatusToggle } from './automation-form'
 
 /**
  * Automations, built from the account's own posts.
@@ -8,21 +9,8 @@ import { getPanelData } from '@/lib/data'
  * own publications needs no browser extension.
  */
 
-const AUTOMATIONS = [
-  {
-    name: 'Empresas de tecnología',
-    keywords: ['software', 'sistema'],
-    status: 'active' as const,
-    posts: 2,
-    enrolled: 214,
-    booked: 8,
-  },
-  { name: 'Post CRM', keywords: ['CRM'], status: 'active' as const, posts: 1, enrolled: 98, booked: 3 },
-  { name: 'Guía de outbound', keywords: ['guia'], status: 'paused' as const, posts: 0, enrolled: 0, booked: 0 },
-]
-
 export default async function AutomationsPage() {
-  const { posts: POSTS } = await getPanelData()
+  const { posts: POSTS, automations, live } = await getPanelData()
   return (
     <div className="p-8">
       <header className="mb-5 flex items-start justify-between">
@@ -30,14 +18,25 @@ export default async function AutomationsPage() {
           <h1 className="text-xl font-semibold tracking-tight">Automatizaciones</h1>
           <p className="text-sm muted">Elegí una publicación y las palabras que la disparan</p>
         </div>
-        <button className="rounded-lg px-3 py-2 text-sm font-medium text-white" style={{ background: 'var(--accent)' }}>
-          Nueva automatización
-        </button>
+        <NewAutomation live={live} />
       </header>
 
+      {automations.length === 0 && live && (
+        // The state where the agent is running and watching nothing. Without
+        // saying so, an empty page reads as "still loading" and the agent
+        // looks broken while it is working exactly as configured.
+        <div className="panel mb-8 rounded-2xl p-5">
+          <h2 className="mb-1 text-sm font-semibold">Todavía no hay ninguna automatización</h2>
+          <p className="text-xs muted">
+            El agente está andando pero no tiene ningún post que vigilar ni ninguna palabra que
+            esperar. Creá una y arranca.
+          </p>
+        </div>
+      )}
+
       <div className="mb-8 grid grid-cols-3 gap-3">
-        {AUTOMATIONS.map((a) => (
-          <div key={a.name} className="panel rounded-2xl p-4">
+        {automations.map((a) => (
+          <div key={a.id} className="panel rounded-2xl p-4">
             <div className="mb-2 flex items-start justify-between gap-2">
               <h2 className="text-sm font-medium">{a.name}</h2>
               <span
@@ -60,11 +59,25 @@ export default async function AutomationsPage() {
               ))}
             </div>
 
-            <div className="flex gap-4 text-xs">
-              <Metric value={a.posts} label="posts" />
-              <Metric value={a.enrolled} label="inscriptos" />
-              <Metric value={a.booked} label="agendaron" />
+            <div className="flex items-end justify-between gap-3">
+              <div className="flex gap-4 text-xs">
+                <Metric value={a.postUrls.length} label={a.postUrls.length === 1 ? 'post' : 'posts'} />
+                <Metric value={a.enrolled} label="inscriptos" />
+                <Metric value={a.booked} label="agendaron" />
+              </div>
+              <StatusToggle id={a.id} status={a.status} live={live} />
             </div>
+
+            {a.postUrls.length === 0 && (
+              <p className="mt-2 text-[11px] muted">Vigila todas tus publicaciones</p>
+            )}
+            {!a.calendarUrl && (
+              // Worth saying: the flow runs to the end and then has nothing to
+              // hand over when someone asks for times.
+              <p className="mt-2 text-[11px]" style={{ color: 'rgb(251 191 36)' }}>
+                Sin link de agenda
+              </p>
+            )}
           </div>
         ))}
       </div>

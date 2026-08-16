@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { and, eq, inArray, notInArray } from 'drizzle-orm'
 
 import { TERMINAL_STATES } from '@linkfy/core'
-import { automations, contacts, createDb, enrollments, jobs, type Db } from '@linkfy/db'
+import { automations, contacts, createDb, enrollments, jobs, posts, type Db } from '@linkfy/db'
 
 /**
  * What the panel can do.
@@ -144,5 +144,107 @@ export async function takeOver(enrollmentId: string): Promise<ActionResult> {
     )
 
   revalidatePath('/inbox')
+  return { ok: true }
+}
+
+
+/**
+ * Creates an automation from the panel.
+ *
+ * Active from the moment it is created: an automation you just described that
+ * then sits there doing nothing is the confusing outcome, and pausing is one
+ * click away.
+ */
+export async function createAutomation(input: {
+  name: string
+  keywords: string
+  postUrl: string
+  calendarUrl: string
+}): Promise<ActionResult> {
+  const ctx = await scope()
+  if (!ctx) return { ok: false, error: NOT_CONFIGURED }
+
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: 'Ponele un nombre.' }
+
+  // Split on commas so several keywords can be typed in one field, lowercased
+  // because matching is case- and accent-insensitive downstream.
+  const keywords = input.keywords
+    .split(',')
+    .map((k) => k.trim().toLowerCase())
+    .filter(Boolean)
+
+  if (keywords.length === 0) {
+    return {
+      ok: false,
+      error: 'Hace falta al menos una palabra clave. Sin una, se dispararía con cualquier comentario.',
+    }
+  }
+
+  const url = input.postUrl.trim()
+  if (url && !url.includes('linkedin.com')) {
+    return { ok: false, error: 'Esa no parece una URL de LinkedIn.' }
+  }
+
+  const postIds: string[] = []
+  if (url) {
+    // Registered here so the automation can point at the post before the agent
+    // has ever scanned it. Same URL-as-URN convention the agent uses.
+    const [post] = await ctx.db
+      .insert(posts)
+      .values({ accountId: ctx.accountId, urn: url, url })
+      .onConflictDoUpdate({ target: [posts.accountId, posts.urn], set: { url } })
+      .returning({ id: posts.id })
+    postIds.push(post!.id)
+  }
+
+  await ctx.db.insert(automations).values({
+    accountId: ctx.accountId,
+    name,
+    status: 'active',
+    keywords,
+    postIds,
+    flow: {
+      nodes: [
+        { id: 'reply', type: 'comment_reply', config: {} },
+        { id: 'invite', type: 'invite', config: {} },
+        { id: 'dm', type: 'dm', config: {} },
+        { id: 'book', type: 'book', config: { calendarUrl: input.calendarUrl.trim() } },
+      ],
+      edges: [
+        { from: 'reply', to: 'invite' },
+        { from: 'invite', to: 'dm' },
+        { from: 'dm', to: 'book' },
+      ],
+    },
+  })
+
+  revalidatePath('/automations')
+  return { ok: true }
+}
+
+/**
+ * Pauses or resumes an automation.
+ *
+ * Pausing stops new people entering. Conversations already under way keep
+ * going — cutting off someone mid-exchange because a rule was paused would
+ * leave a real person waiting on an answer that never comes.
+ */
+export async function setAutomationStatus(
+  automationId: string,
+  status: 'active' | 'paused',
+): Promise<ActionResult> {
+  const ctx = await scope()
+  if (!ctx) return { ok: false, error: NOT_CONFIGURED }
+
+  const updated = await ctx.db
+    .update(automations)
+    .set({ status, updatedAt: new Date() })
+    .where(and(eq(automations.id, automationId), eq(automations.accountId, ctx.accountId)))
+    .returning({ id: automations.id })
+
+  if (updated.length === 0) return { ok: false, error: 'Esa automatización no es de tu cuenta.' }
+
+  revalidatePath('/automations')
   return { ok: true }
 }
