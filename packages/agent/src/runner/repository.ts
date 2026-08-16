@@ -357,6 +357,7 @@ export class DrizzleRepository implements Repository {
         attempts: enrollments.attempts,
         stage: enrollments.stage,
         threadId: enrollments.threadId,
+        autoReply: enrollments.autoReply,
         conversationReadAt: enrollments.conversationReadAt,
       })
       .from(enrollments)
@@ -386,6 +387,7 @@ export class DrizzleRepository implements Repository {
       attempts: row.attempts,
       stage: (row.stage as ConversationStage | null) ?? null,
       threadId: row.threadId,
+      autoReply: row.autoReply === 1,
       conversationReadAt: row.conversationReadAt,
     }))
   }
@@ -704,6 +706,7 @@ export class DrizzleRepository implements Repository {
     intent: string
     confidence: number
     suggestions: QuickReply[]
+    nextStage: ConversationStage
     notes: string[]
     threadId?: string | null
   }): Promise<void> {
@@ -714,7 +717,11 @@ export class DrizzleRepository implements Repository {
         lastIntent: input.intent,
         // Stored 0-100 so the column stays an integer; the panel divides again.
         lastConfidence: Math.round(input.confidence * 100),
-        suggestions: input.suggestions,
+        suggestions: input.suggestions.map((option) => ({
+          ...option,
+          // Only the option that advances moves the stage; the rest stay put.
+          nextStage: option.advances ? input.nextStage : input.stage,
+        })),
         agentNotes: input.notes,
         conversationReadAt: this.now(),
         ...(input.threadId ? { threadId: input.threadId } : {}),

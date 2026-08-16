@@ -99,6 +99,7 @@ export async function getPanelData(): Promise<PanelData> {
       lastConfidence: enrollments.lastConfidence,
       suggestions: enrollments.suggestions,
       agentNotes: enrollments.agentNotes,
+      autoReply: enrollments.autoReply,
       keyword: enrollments.matchedKeyword,
       comment: enrollments.commentText,
       postUrl: posts.url,
@@ -173,6 +174,7 @@ export async function getPanelData(): Promise<PanelData> {
           signals: {},
         }
       : undefined,
+    autoReply: row.autoReply === 1,
     quickReplies: (row.suggestions ?? []).map((s) => ({
       label: s.label,
       body: s.body,

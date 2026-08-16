@@ -47,6 +47,8 @@ export type PendingEnrollment = {
   /** Null until they reply — the outbound sequence has no stage. */
   stage: ConversationStage | null
   threadId: string | null
+  /** Set from the inbox: let this one conversation run unattended. */
+  autoReply: boolean
   /** When the agent last classified this conversation. */
   conversationReadAt: Date | null
 }
@@ -163,6 +165,8 @@ export interface Repository {
     intent: string
     confidence: number
     suggestions: QuickReply[]
+    /** Where the proposed step leads, stored with each option that advances. */
+    nextStage: ConversationStage
     notes: string[]
     threadId?: string | null
   }): Promise<void>

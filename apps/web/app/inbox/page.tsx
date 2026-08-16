@@ -60,7 +60,7 @@ export default async function InboxPage({
   searchParams: Promise<{ lead?: string }>
 }) {
   const params = await searchParams
-  const { leads } = await getPanelData()
+  const { leads, live } = await getPanelData()
   const active = leads.find((l) => l.id === params.lead) ?? leads[0]
 
   // Before the first lead arrives this page has nothing to show, and rendering
@@ -81,7 +81,7 @@ export default async function InboxPage({
   return (
     <div className="flex h-screen">
       <ConversationList leads={leads} activeId={active.id} />
-      <Thread lead={active} />
+      <Thread lead={active} live={live} />
       <SidePanel lead={active} />
     </div>
   )
@@ -133,7 +133,7 @@ function ConversationList({ leads: LEADS, activeId }: { leads: FixtureLead[]; ac
   )
 }
 
-function Thread({ lead }: { lead: FixtureLead }) {
+function Thread({ lead, live }: { lead: FixtureLead; live: boolean }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <div
@@ -196,12 +196,12 @@ function Thread({ lead }: { lead: FixtureLead }) {
         ))}
       </div>
 
-      <QuickReplyBar lead={lead} />
+      <QuickReplyBar lead={lead} live={live} />
     </div>
   )
 }
 
-function QuickReplyBar({ lead }: { lead: FixtureLead }) {
+function QuickReplyBar({ lead, live }: { lead: FixtureLead; live: boolean }) {
   const firstName = lead.name.split(' ')[0]!
   // The agent's own proposals win: they were produced by the playbook against
   // this exact conversation, while the local list is a mirror for the fixtures.
@@ -215,6 +215,9 @@ function QuickReplyBar({ lead }: { lead: FixtureLead }) {
 
   return (
     <ReplyBar
+      enrollmentId={lead.id}
+      live={live}
+      autoOn={lead.autoReply ?? false}
       replies={replies}
       blockedReason={blocked ? lead.analysis?.notes[0] : undefined}
       // Only the playbook decides this. The pitch is never auto-sendable.

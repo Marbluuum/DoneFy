@@ -350,6 +350,63 @@ describe('conversaciones', () => {
   })
 })
 
+describe('el panel y el agente', () => {
+  test('a reply queued from the panel is sent and moves the stage', async () => {
+    // The seam between the two halves. The panel never touches LinkedIn — it
+    // writes a job and the agent delivers it — so if the payload it writes and
+    // the payload the agent reads ever drift, the button silently does
+    // nothing and the owner blames the lead for not answering.
+    const enrollmentId = await enrollmentIdOf('wendy-torres')
+    const body = 'Wendy! estas en la busqueda de mas clientes?'
+
+    await db.insert(jobs).values({
+      accountId,
+      enrollmentId,
+      type: 'send_reply',
+      payload: {
+        publicIdentifier: 'wendy-torres',
+        body,
+        nextStage: 'qualifying_pain',
+      },
+      status: 'pending',
+      runAfter: clock,
+    })
+
+    const result = await tick()
+    assert.equal(result.executed, 1)
+    assert.ok(performed.includes(`dm:${body}`), `esperaba el DM: ${performed.join(' | ')}`)
+
+    const [row] = await db
+      .select({ stage: enrollments.stage, suggestions: enrollments.suggestions })
+      .from(enrollments)
+      .where(eq(enrollments.id, enrollmentId))
+
+    assert.equal(row!.stage, 'qualifying_pain', 'la conversación avanzó')
+    assert.equal(
+      (row!.suggestions ?? []).length,
+      0,
+      'las sugerencias de la etapa anterior no quedan en pantalla',
+    )
+
+    // Asserted by presence rather than by "the last one": the test clock is
+    // frozen, so every message shares an instant and ordering by it is a coin
+    // flip.
+    const thread = await db
+      .select({ body: messages.body })
+      .from(messages)
+      .where(eq(messages.enrollmentId, enrollmentId))
+    assert.ok(thread.some((m) => m.body === body), 'y quedó en el historial')
+  })
+})
+
+async function enrollmentIdOf(identifier: string): Promise<string> {
+  const [row] = await db
+    .select({ id: enrollments.id })
+    .from(enrollments)
+    .where(eq(enrollments.contactId, await contactIdOf(identifier)))
+  return row!.id
+}
+
 async function contactIdOf(identifier: string): Promise<string> {
   const [row] = await db
     .select({ id: contacts.id })

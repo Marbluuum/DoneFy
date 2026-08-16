@@ -1,5 +1,5 @@
 {
-  "id": "d1de4129-9a7f-4ff1-b8d7-6139ec9eb6eb",
+  "id": "5d30973c-dc89-44ef-b3c6-384d7bffa2e5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -257,6 +257,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "auto_reply": {
+          "name": "auto_reply",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "last_intent": {
           "name": "last_intent",

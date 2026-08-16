@@ -144,6 +144,14 @@ export const enrollments = pgTable('enrollments', {
   /** LinkedIn's thread id, so replies are read from the right conversation. */
   threadId: text('thread_id'),
 
+  /**
+   * Per-conversation autopilot, set from the inbox.
+   *
+   * The global mode is a ceiling; this only ever loosens one thread, and only
+   * where the playbook already allows unattended sending.
+   */
+  autoReply: integer('auto_reply').notNull().default(0),
+
   /** The agent's last read of the lead, for the panel's right-hand column. */
   lastIntent: text('last_intent'),
   /** 0-100. Stored as an integer to keep the column free of float surprises. */
@@ -274,6 +282,12 @@ type SuggestedReply = {
   label: string
   body: string
   advances: boolean
+  /**
+   * Where sending this one leaves the conversation. Stored per option so the
+   * panel never has to compute it — the playbook already decided, and a second
+   * implementation in the UI is a second thing to get wrong.
+   */
+  nextStage: string
 }
 
 // The flow graph shape lives in @linkfy/core; re-declared structurally here to

@@ -32,6 +32,7 @@ CREATE TABLE "enrollments" (
 	"state" text DEFAULT 'detected' NOT NULL,
 	"stage" text,
 	"thread_id" text,
+	"auto_reply" integer DEFAULT 0 NOT NULL,
 	"last_intent" text,
 	"last_confidence" integer,
 	"suggestions" jsonb DEFAULT '[]'::jsonb NOT NULL,

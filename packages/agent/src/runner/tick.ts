@@ -565,7 +565,14 @@ async function advanceConversations(
         calendarUrl: calendars.get(enrollment.automationId) ?? '',
       },
       classification,
-      { ...DEFAULT_POLICY, mode: deps.mode ?? 'copilot', workingHours: deps.workingHours },
+      {
+        ...DEFAULT_POLICY,
+        // A thread switched to autopilot from the inbox loosens only itself,
+        // and only as far as the playbook already allows — the step-level
+        // rules still apply, so the pitch stays manual either way.
+        mode: enrollment.autoReply ? 'autopilot' : (deps.mode ?? 'copilot'),
+        workingHours: deps.workingHours,
+      },
       now,
     )
 
@@ -575,6 +582,7 @@ async function advanceConversations(
       intent: classification.intent,
       confidence: classification.confidence,
       suggestions: decision.action.kind === 'suggest' ? decision.action.options : [],
+      nextStage: decision.nextStage,
       notes: decision.notes,
     })
 

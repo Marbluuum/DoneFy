@@ -344,6 +344,7 @@ test('a due enrollment gets its next job queued', async () => {
         degree: null,
         stage: null,
         threadId: null,
+        autoReply: false,
         conversationReadAt: null,
         optedOut: false,
         attempts: 0,

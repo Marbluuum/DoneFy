@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
+
+import { sendReply, setAutoReply, takeOver } from '../actions'
 
 /**
  * The reply bar.
@@ -19,17 +21,55 @@ import { useState } from 'react'
 export type Reply = { label: string; body: string; advances: boolean }
 
 export function ReplyBar({
+  enrollmentId,
   replies,
   blockedReason,
   autoAllowed,
+  autoOn,
+  live,
 }: {
+  enrollmentId: string
   replies: Reply[]
   blockedReason?: string
   /** Whether the playbook would let this step send unattended. */
   autoAllowed: boolean
+  /** Whether this conversation is already on unattended replying. */
+  autoOn: boolean
+  /** False when the panel is showing fixtures; nothing can be sent then. */
+  live: boolean
 }) {
-  const [autoSend, setAutoSend] = useState(false)
+  const [autoSend, setAutoSend] = useState(autoOn)
   const [selected, setSelected] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const [sent, setSent] = useState(false)
+  const [pending, startTransition] = useTransition()
+
+  // Nothing is sent from here: the click queues the message and the agent on
+  // the laptop delivers it. So the button reports "queued", not "sent" — the
+  // difference is visible when the agent is off, and saying "sent" then would
+  // be a lie the owner only discovers from the lead's silence.
+  function queue(body: string) {
+    setError(null)
+    startTransition(async () => {
+      const result = live
+        ? await sendReply(enrollmentId, body)
+        : ({ ok: false, error: 'Son datos de ejemplo — conectá tu cuenta con `npm run init`.' } as const)
+      if (result.ok) setSent(true)
+      else setError(result.error)
+    })
+  }
+
+  function toggleAuto(next: boolean) {
+    setAutoSend(next)
+    if (!live) return
+    startTransition(async () => {
+      const result = await setAutoReply(enrollmentId, next)
+      if (!result.ok) {
+        setAutoSend(!next)
+        setError(result.error)
+      }
+    })
+  }
 
   if (blockedReason) {
     return (
@@ -44,7 +84,7 @@ export function ReplyBar({
             <p className="text-xs muted">{blockedReason}</p>
           </div>
         </div>
-        <Composer />
+        <Composer onSend={queue} pending={pending} />
       </div>
     )
   }
@@ -72,7 +112,7 @@ export function ReplyBar({
               <button
                 type="button"
                 disabled={!autoAllowed}
-                onClick={() => setAutoSend((v) => !v)}
+                onClick={() => toggleAuto(!autoSend)}
                 className="relative h-4 w-7 rounded-full transition-colors"
                 style={{ background: autoSend && autoAllowed ? 'var(--accent)' : 'var(--border)' }}
               >
@@ -123,34 +163,63 @@ export function ReplyBar({
 
           <div className="mb-3 flex gap-2">
             <button
-              className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-white"
+              onClick={() => queue(replies[selected]?.body ?? '')}
+              disabled={pending || sent}
+              className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
               style={{ background: 'var(--accent)' }}
             >
-              {autoSend && autoAllowed ? 'Programar envío' : 'Enviar esta respuesta'}
+              {sent ? 'En cola ✓' : pending ? 'Encolando…' : 'Enviar esta respuesta'}
             </button>
             <button
-              className="rounded-xl border px-4 py-2.5 text-sm transition-colors hover:bg-[var(--accent-soft)]"
+              onClick={() => live && startTransition(async () => void (await takeOver(enrollmentId)))}
+              disabled={pending}
+              className="rounded-xl border px-4 py-2.5 text-sm transition-colors hover:bg-[var(--accent-soft)] disabled:opacity-60"
               style={{ borderColor: 'var(--border)' }}
+              title="El agente deja de proponer y la conversación queda tuya"
             >
-              Editar
+              La sigo yo
             </button>
           </div>
+
+          {sent && (
+            <p className="mb-3 text-[11px] muted">
+              El agente la envía en su próximo ciclo. Si está apagado, queda esperando.
+            </p>
+          )}
+          {error && (
+            <p className="mb-3 text-[11px]" style={{ color: 'rgb(251 113 133)' }}>
+              {error}
+            </p>
+          )}
         </>
       )}
 
-      <Composer />
+      <Composer onSend={queue} pending={pending} />
     </div>
   )
 }
 
-function Composer() {
+function Composer({ onSend, pending }: { onSend: (body: string) => void; pending: boolean }) {
+  const [text, setText] = useState('')
+
   return (
     <div className="flex items-end gap-2">
-      <div className="flex-1 rounded-xl border px-3 py-2 text-sm muted" style={{ borderColor: 'var(--border)' }}>
-        …o escribí la tuya
-      </div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="…o escribí la tuya"
+        rows={1}
+        className="flex-1 resize-none rounded-xl border bg-transparent px-3 py-2 text-sm outline-none"
+        style={{ borderColor: 'var(--border)' }}
+      />
       <button
-        className="rounded-xl border px-4 py-2 text-sm transition-colors hover:bg-[var(--accent-soft)]"
+        onClick={() => {
+          if (!text.trim()) return
+          onSend(text)
+          setText('')
+        }}
+        disabled={pending || !text.trim()}
+        className="rounded-xl border px-4 py-2 text-sm transition-colors hover:bg-[var(--accent-soft)] disabled:opacity-50"
         style={{ borderColor: 'var(--border)' }}
       >
         Enviar

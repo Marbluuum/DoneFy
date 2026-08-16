@@ -46,6 +46,8 @@ export type FixtureLead = {
    * to the playbook shows up here without the panel being edited too.
    */
   quickReplies?: Array<{ label: string; body: string; advances: boolean }>
+  /** Unattended replying, set per conversation from the inbox. */
+  autoReply?: boolean
 }
 
 export const LEADS: FixtureLead[] = [
